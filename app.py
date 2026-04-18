@@ -2,7 +2,7 @@ import streamlit as st
 from datetime import datetime
 import platform, os, shutil
 
-from database import init_db, get_connection, get_all_other_users
+from database import init_db, get_connection, get_all_other_users, admin_exists
 from database import freeze_user, unfreeze_user, request_unfreeze, get_user_status, get_frozen_users
 from database import create_broadcast, get_broadcasts, get_user_pref, set_user_pref
 from database import record_failed_login, reset_failed_logins, check_lockout
@@ -105,38 +105,83 @@ st.sidebar.title("🔑 Authentication")
 auth_mode = st.sidebar.radio("Choose Action", ["Login", "Register"])
 
 if auth_mode == "Register":
-    st.sidebar.subheader("Register New User")
-    reg_username = st.sidebar.text_input("Username", key="reg_user")
-    reg_password = st.sidebar.text_input("Password", type="password", key="reg_pass")
-    reg_key = st.sidebar.text_input("Personal Encryption Key", type="password", key="reg_key")
-    reg_pin = st.sidebar.text_input("Set 4-digit PIN (used for decryption & duress detection)", type="password", key="reg_pin")
-    reg_role = st.sidebar.selectbox("Account Role", ["client", "admin"], key="reg_role")
+    # ── First-time Admin Setup (one-time only) ──────────────────────────────
+    if not admin_exists():
+        st.sidebar.subheader("🛡️ Admin Account Setup")
+        st.sidebar.info(
+            "No admin account exists yet. "
+            "Set up the single administrator account first."
+        )
+        reg_username = st.sidebar.text_input("Admin Username", key="reg_user")
+        reg_password = st.sidebar.text_input("Admin Password", type="password", key="reg_pass")
+        reg_key      = st.sidebar.text_input("Personal Encryption Key", type="password", key="reg_key")
+        reg_pin      = st.sidebar.text_input(
+            "4-digit PIN (decryption & duress detection)", type="password", key="reg_pin"
+        )
 
-    if st.sidebar.button("Register"):
-        if reg_username and reg_password and reg_key and reg_pin:
-            if not reg_pin.isdigit() or len(reg_pin) != 4:
-                st.sidebar.error("PIN must be exactly 4 digits")
-
-            if not is_strong_password(reg_password):
-                st.sidebar.error("Password too weak! Must be 8+ chars, include uppercase, lowercase, number & symbol.")
-            else:
+        if st.sidebar.button("Create Admin Account"):
+            error = False
+            if not (reg_username and reg_password and reg_key and reg_pin):
+                st.sidebar.warning("Please fill in all fields.")
+                error = True
+            if not error and (not reg_pin.isdigit() or len(reg_pin) != 4):
+                st.sidebar.error("PIN must be exactly 4 digits.")
+                error = True
+            if not error and not is_strong_password(reg_password):
+                st.sidebar.error(
+                    "Password too weak! Needs 8+ chars, uppercase, lowercase, digit & symbol."
+                )
+                error = True
+            if not error:
                 private_key, public_key = generate_keys()
                 success = register_user(
-                    reg_username,
-                    reg_password,
-                    reg_key,
-                    role=reg_role,
-                    pin=str(reg_pin),
-                    public_key=public_key,
-                    private_key=private_key
+                    reg_username, reg_password, reg_key,
+                    role="admin", pin=str(reg_pin),
+                    public_key=public_key, private_key=private_key
                 )
                 if success:
-                    st.sidebar.success(f"User registered successfully as **{reg_role}**!")
-                    log_action(reg_username, f"Registered account with role: {reg_role}", "INFO")
+                    st.sidebar.success("✅ Admin account created! You can now log in.")
+                    log_action(reg_username, "Admin account created (first-time setup)", "INFO")
                 else:
                     st.sidebar.error("Username already exists.")
-        else:
-            st.sidebar.warning("Fill all fields.")
+
+    # ── Regular Client Registration (admin already exists) ─────────────────
+    else:
+        st.sidebar.subheader("Register New User")
+        reg_username = st.sidebar.text_input("Username", key="reg_user")
+        reg_password = st.sidebar.text_input("Password", type="password", key="reg_pass")
+        reg_key      = st.sidebar.text_input("Personal Encryption Key", type="password", key="reg_key")
+        reg_pin      = st.sidebar.text_input(
+            "4-digit PIN (decryption & duress detection)", type="password", key="reg_pin"
+        )
+        # Role is always "client" — admin role is locked after setup
+        reg_role = "client"
+
+        if st.sidebar.button("Register"):
+            error = False
+            if not (reg_username and reg_password and reg_key and reg_pin):
+                st.sidebar.warning("Fill all fields.")
+                error = True
+            if not error and (not reg_pin.isdigit() or len(reg_pin) != 4):
+                st.sidebar.error("PIN must be exactly 4 digits.")
+                error = True
+            if not error and not is_strong_password(reg_password):
+                st.sidebar.error(
+                    "Password too weak! Must be 8+ chars, include uppercase, lowercase, number & symbol."
+                )
+                error = True
+            if not error:
+                private_key, public_key = generate_keys()
+                success = register_user(
+                    reg_username, reg_password, reg_key,
+                    role=reg_role, pin=str(reg_pin),
+                    public_key=public_key, private_key=private_key
+                )
+                if success:
+                    st.sidebar.success("User registered successfully as **Client**!")
+                    log_action(reg_username, "Registered account with role: client", "INFO")
+                else:
+                    st.sidebar.error("Username already exists.")
 
 if auth_mode == "Login":
     st.sidebar.subheader("Login")
@@ -823,22 +868,13 @@ if st.session_state.user:
                 if severity_filter != "All":
                     df_logs = df_logs[df_logs["Severity"] == severity_filter]
 
-                def color_sev(val):
-                    mapping = {
-                        "INFO": "color: #2196F3",
-                        "WARNING": "color: #FF9800",
-                        "ALERT": "color: #f44336",
-                        "CRITICAL": "color: #9C27B0; font-weight:bold"
-                    }
-                    return mapping.get(str(val).upper(), "")
+                def color_severity(val):
+                    colors = {"INFO": "color: #2196F3", "WARNING": "color: #FF9800",
+                              "ALERT": "color: #f44336", "CRITICAL": "color: #9C27B0; font-weight:bold"}
+                    return colors.get(val, "")
 
-                st.dataframe(
-                    df_logs.style.apply(
-                        lambda col: [color_sev(v) for v in col],
-                        subset=["Severity"]
-                    ),
-                    use_container_width=True
-                )
+                st.dataframe(df_logs.style.applymap(color_severity, subset=["Severity"]),
+                             use_container_width=True)
             else:
                 st.info("No logs available.")
         else:
@@ -1702,12 +1738,9 @@ if st.session_state.user:
                         "INFO": "color: #2196F3", "WARNING": "color: #FF9800",
                         "ALERT": "color: #f44336", "CRITICAL": "color: #9C27B0; font-weight:bold"
                     }
-                    return mapping.get(str(val).upper(), "")
+                    return mapping.get(val, '')
                 st.dataframe(
-                    df_all_logs.style.apply(
-                        lambda col: [color_sev(v) for v in col],
-                        subset=["Severity"]
-                    ),
+                    df_all_logs.style.applymap(color_sev, subset=["Severity"]),
                     use_container_width=True
                 )
                 st.markdown("#### Severity Distribution")

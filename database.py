@@ -422,3 +422,12 @@ def get_login_devices(username):
     rows = cursor.fetchall()
     conn.close()
     return rows
+
+def admin_exists():
+    """Return True if at least one admin account exists in the database."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("SELECT COUNT(*) FROM users WHERE role='admin'")
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count > 0

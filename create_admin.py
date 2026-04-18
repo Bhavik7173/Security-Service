@@ -15,7 +15,7 @@ from secure_messaging import generate_keys
 # ─────────────────────────────────────────────
 # ✏️  SET YOUR ADMIN CREDENTIALS HERE
 # ─────────────────────────────────────────────
-ADMIN_USERNAME       = "admin"          # Change to your desired username
+ADMIN_USERNAME       = "Admin"          # Change to your desired username
 ADMIN_PASSWORD       = "Admin@12345"     # Must be strong (8+ chars, upper, lower, digit, symbol)
 ADMIN_PIN            = "1234"           # Must be exactly 4 digits
 ADMIN_PERSONAL_KEY   = "mySecretKey99"  # Your personal encryption key (keep this safe!)

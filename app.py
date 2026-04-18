@@ -1693,9 +1693,12 @@ if st.session_state.user:
                         "INFO": "color: #2196F3", "WARNING": "color: #FF9800",
                         "ALERT": "color: #f44336", "CRITICAL": "color: #9C27B0; font-weight:bold"
                     }
-                    return mapping.get(val, '')
+                    return mapping.get(str(val).upper(), "")
                 st.dataframe(
-                    df_all_logs.style.applymap(color_sev, subset=["Severity"]),
+                    df_all_logs.style.apply(
+                        lambda col: [color_sev(v) for v in col],
+                        subset=["Severity"]
+                    ),
                     use_container_width=True
                 )
                 st.markdown("#### Severity Distribution")

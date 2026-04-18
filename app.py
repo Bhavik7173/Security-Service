@@ -867,14 +867,22 @@ if st.session_state.user:
                 severity_filter = st.selectbox("Filter by Severity", ["All", "INFO", "WARNING", "ALERT", "CRITICAL"])
                 if severity_filter != "All":
                     df_logs = df_logs[df_logs["Severity"] == severity_filter]
-
-                def color_severity(val):
-                    colors = {"INFO": "color: #2196F3", "WARNING": "color: #FF9800",
-                              "ALERT": "color: #f44336", "CRITICAL": "color: #9C27B0; font-weight:bold"}
-                    return colors.get(val, "")
-
-                st.dataframe(df_logs.style.applymap(color_severity, subset=["Severity"]),
-                             use_container_width=True)
+ 
+                def highlight_severity(row):
+                    color_map = {
+                        "INFO": "color: #2196F3",
+                        "WARNING": "color: #FF9800",
+                        "ALERT": "color: #f44336",
+                        "CRITICAL": "color: #9C27B0; font-weight:bold"
+                    }
+                    sev = row.get("Severity", "")
+                    style = color_map.get(sev, "")
+                    return ["" if col != "Severity" else style for col in row.index]
+ 
+                st.dataframe(
+                    df_logs.style.apply(highlight_severity, axis=1),
+                    use_container_width=True
+                )
             else:
                 st.info("No logs available.")
         else:

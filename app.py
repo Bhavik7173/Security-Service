@@ -17,6 +17,8 @@ import pandas as pd
 import plotly.express as px
 from secure_messaging import generate_keys
 from secure_messaging import *
+from database import *
+from create_admin import *
 
 
 # -------------------------
@@ -75,7 +77,6 @@ st.set_page_config(
 )
 
 st.title("🔐 Secure Chat System with Breach Detection")
-st.caption("Version 3 — Professional Security Messaging Dashboard")
 
 # -------------------------
 # SESSION STATE
@@ -104,84 +105,126 @@ st.sidebar.title("🔑 Authentication")
 
 auth_mode = st.sidebar.radio("Choose Action", ["Login", "Register"])
 
+# if auth_mode == "Register":
+#     # ── First-time Admin Setup (one-time only) ──────────────────────────────
+#     if not admin_exists():
+#         st.sidebar.subheader("🛡️ Admin Account Setup")
+#         st.sidebar.info(
+#             "No admin account exists yet. "
+#             "Set up the single administrator account first."
+#         )
+#         reg_username = st.sidebar.text_input("Admin Username", key="reg_user")
+#         reg_password = st.sidebar.text_input("Admin Password", type="password", key="reg_pass")
+#         reg_key      = st.sidebar.text_input("Personal Encryption Key", type="password", key="reg_key")
+#         reg_pin      = st.sidebar.text_input(
+#             "4-digit PIN (decryption & duress detection)", type="password", key="reg_pin"
+#         )
+
+#         if st.sidebar.button("Create Admin Account"):
+#             error = False
+#             if not (reg_username and reg_password and reg_key and reg_pin):
+#                 st.sidebar.warning("Please fill in all fields.")
+#                 error = True
+#             if not error and (not reg_pin.isdigit() or len(reg_pin) != 4):
+#                 st.sidebar.error("PIN must be exactly 4 digits.")
+#                 error = True
+#             if not error and not is_strong_password(reg_password):
+#                 st.sidebar.error(
+#                     "Password too weak! Needs 8+ chars, uppercase, lowercase, digit & symbol."
+#                 )
+#                 error = True
+#             if not error:
+#                 private_key, public_key = generate_keys()
+#                 success = register_user(
+#                     reg_username, reg_password, reg_key,
+#                     role="admin", pin=str(reg_pin),
+#                     public_key=public_key, private_key=private_key
+#                 )
+#                 if success:
+#                     st.sidebar.success("✅ Admin account created! You can now log in.")
+#                     log_action(reg_username, "Admin account created (first-time setup)", "INFO")
+#                 else:
+#                     st.sidebar.error("Username already exists.")
+
+#     # ── Regular Client Registration (admin already exists) ─────────────────
+#     else:
+#         st.sidebar.subheader("Register New User")
+#         reg_username = st.sidebar.text_input("Username", key="reg_user")
+#         reg_password = st.sidebar.text_input("Password", type="password", key="reg_pass")
+#         reg_key      = st.sidebar.text_input("Personal Encryption Key", type="password", key="reg_key")
+#         reg_pin      = st.sidebar.text_input(
+#             "4-digit PIN (decryption & duress detection)", type="password", key="reg_pin"
+#         )
+#         # Role is always "client" — admin role is locked after setup
+#         reg_role = "client"
+
+#         if st.sidebar.button("Register"):
+#             error = False
+#             if not (reg_username and reg_password and reg_key and reg_pin):
+#                 st.sidebar.warning("Fill all fields.")
+#                 error = True
+#             if not error and (not reg_pin.isdigit() or len(reg_pin) != 4):
+#                 st.sidebar.error("PIN must be exactly 4 digits.")
+#                 error = True
+#             if not error and not is_strong_password(reg_password):
+#                 st.sidebar.error(
+#                     "Password too weak! Must be 8+ chars, include uppercase, lowercase, number & symbol."
+#                 )
+#                 error = True
+#             if not error:
+#                 private_key, public_key = generate_keys()
+#                 success = register_user(
+#                     reg_username, reg_password, reg_key,
+#                     role=reg_role, pin=str(reg_pin),
+#                     public_key=public_key, private_key=private_key
+#                 )
+#                 if success:
+#                     st.sidebar.success("User registered successfully as **Client**!")
+#                     log_action(reg_username, "Registered account with role: client", "INFO")
+#                 else:
+#                     st.sidebar.error("Username already exists.")
+
 if auth_mode == "Register":
-    # ── First-time Admin Setup (one-time only) ──────────────────────────────
-    if not admin_exists():
-        st.sidebar.subheader("🛡️ Admin Account Setup")
-        st.sidebar.info(
-            "No admin account exists yet. "
-            "Set up the single administrator account first."
-        )
-        reg_username = st.sidebar.text_input("Admin Username", key="reg_user")
-        reg_password = st.sidebar.text_input("Admin Password", type="password", key="reg_pass")
-        reg_key      = st.sidebar.text_input("Personal Encryption Key", type="password", key="reg_key")
-        reg_pin      = st.sidebar.text_input(
-            "4-digit PIN (decryption & duress detection)", type="password", key="reg_pin"
-        )
+    st.sidebar.subheader("Register New User")
+    st.sidebar.caption("🔒 All new accounts are registered as **Client** only.")
 
-        if st.sidebar.button("Create Admin Account"):
-            error = False
-            if not (reg_username and reg_password and reg_key and reg_pin):
-                st.sidebar.warning("Please fill in all fields.")
-                error = True
-            if not error and (not reg_pin.isdigit() or len(reg_pin) != 4):
-                st.sidebar.error("PIN must be exactly 4 digits.")
-                error = True
-            if not error and not is_strong_password(reg_password):
-                st.sidebar.error(
-                    "Password too weak! Needs 8+ chars, uppercase, lowercase, digit & symbol."
-                )
-                error = True
-            if not error:
+    reg_username  = st.sidebar.text_input("Username", key="reg_user")
+    reg_password  = st.sidebar.text_input("Password", type="password", key="reg_pass")
+    reg_key       = st.sidebar.text_input("Personal Encryption Key", type="password", key="reg_key")
+    reg_pin       = st.sidebar.text_input("Set 4-digit PIN", type="password", key="reg_pin")
+
+    if st.sidebar.button("Register"):
+        if reg_username and reg_password and reg_key and reg_pin:
+
+            # ── Block any attempt to use the admin's username ──
+            admin_uname = get_admin_username()
+            if admin_uname and reg_username.lower() == admin_uname.lower():
+                st.sidebar.error("❌ That username is reserved. Please choose a different username.")
+
+            elif not reg_pin.isdigit() or len(reg_pin) != 4:
+                st.sidebar.error("❌ PIN must be exactly 4 digits.")
+
+            elif not is_strong_password(reg_password):
+                st.sidebar.error("❌ Password too weak! Must be 8+ chars, include uppercase, lowercase, number & symbol.")
+
+            else:
                 private_key, public_key = generate_keys()
                 success = register_user(
-                    reg_username, reg_password, reg_key,
-                    role="admin", pin=str(reg_pin),
-                    public_key=public_key, private_key=private_key
+                    reg_username,
+                    reg_password,
+                    reg_key,
+                    role="client",       # Always client — admin is set via create_admin.py
+                    pin=str(reg_pin),
+                    public_key=public_key,
+                    private_key=private_key
                 )
                 if success:
-                    st.sidebar.success("✅ Admin account created! You can now log in.")
-                    log_action(reg_username, "Admin account created (first-time setup)", "INFO")
+                    st.sidebar.success("✅ Client account registered successfully!")
+                    log_action(reg_username, "Registered new client account", "INFO")
                 else:
-                    st.sidebar.error("Username already exists.")
-
-    # ── Regular Client Registration (admin already exists) ─────────────────
-    else:
-        st.sidebar.subheader("Register New User")
-        reg_username = st.sidebar.text_input("Username", key="reg_user")
-        reg_password = st.sidebar.text_input("Password", type="password", key="reg_pass")
-        reg_key      = st.sidebar.text_input("Personal Encryption Key", type="password", key="reg_key")
-        reg_pin      = st.sidebar.text_input(
-            "4-digit PIN (decryption & duress detection)", type="password", key="reg_pin"
-        )
-        # Role is always "client" — admin role is locked after setup
-        reg_role = "client"
-
-        if st.sidebar.button("Register"):
-            error = False
-            if not (reg_username and reg_password and reg_key and reg_pin):
-                st.sidebar.warning("Fill all fields.")
-                error = True
-            if not error and (not reg_pin.isdigit() or len(reg_pin) != 4):
-                st.sidebar.error("PIN must be exactly 4 digits.")
-                error = True
-            if not error and not is_strong_password(reg_password):
-                st.sidebar.error(
-                    "Password too weak! Must be 8+ chars, include uppercase, lowercase, number & symbol."
-                )
-                error = True
-            if not error:
-                private_key, public_key = generate_keys()
-                success = register_user(
-                    reg_username, reg_password, reg_key,
-                    role=reg_role, pin=str(reg_pin),
-                    public_key=public_key, private_key=private_key
-                )
-                if success:
-                    st.sidebar.success("User registered successfully as **Client**!")
-                    log_action(reg_username, "Registered account with role: client", "INFO")
-                else:
-                    st.sidebar.error("Username already exists.")
+                    st.sidebar.error("❌ Username already exists. Please choose another.")
+        else:
+            st.sidebar.warning("⚠️ Please fill in all fields.")
 
 if auth_mode == "Login":
     st.sidebar.subheader("Login")

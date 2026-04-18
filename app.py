@@ -289,13 +289,9 @@ if st.session_state.user:
 
     # Admin sees all pages; clients see everything except full Logs page
     if user_is_admin:
-        nav_pages = ["Dashboard", "Send Message", "Inbox", "Logs", "Security Center",
-                     "Profile", "File Integrity", "Network Traffic Analysis",
-                     "Search Messages", "Admin Panel"]
+        nav_pages = ["Dashboard", "Send Message", "Inbox", "Search Messages", "File Integrity", "Logs", "Security Center", "Network Traffic Analysis", "Admin Panel", "Profile"]
     else:
-        nav_pages = ["Dashboard", "Send Message", "Inbox",
-                      "File Integrity", "Profile",
-                     "Search Messages"]
+        nav_pages = ["Dashboard", "Send Message", "Inbox", "Search Messages", "File Integrity", "Profile"]
 
     page = st.sidebar.radio("Go to", nav_pages)
 

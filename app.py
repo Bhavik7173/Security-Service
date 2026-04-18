@@ -823,13 +823,22 @@ if st.session_state.user:
                 if severity_filter != "All":
                     df_logs = df_logs[df_logs["Severity"] == severity_filter]
 
-                def color_severity(val):
-                    colors = {"INFO": "color: #2196F3", "WARNING": "color: #FF9800",
-                              "ALERT": "color: #f44336", "CRITICAL": "color: #9C27B0; font-weight:bold"}
-                    return colors.get(val, "")
+                def color_sev(val):
+                    mapping = {
+                        "INFO": "color: #2196F3",
+                        "WARNING": "color: #FF9800",
+                        "ALERT": "color: #f44336",
+                        "CRITICAL": "color: #9C27B0; font-weight:bold"
+                    }
+                    return mapping.get(str(val).upper(), "")
 
-                st.dataframe(df_logs.style.applymap(color_severity, subset=["Severity"]),
-                             use_container_width=True)
+                st.dataframe(
+                    df_logs.style.apply(
+                        lambda col: [color_sev(v) for v in col],
+                        subset=["Severity"]
+                    ),
+                    use_container_width=True
+                )
             else:
                 st.info("No logs available.")
         else:

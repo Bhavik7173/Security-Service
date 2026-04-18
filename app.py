@@ -9,7 +9,6 @@ from database import record_failed_login, reset_failed_logins, check_lockout
 from database import add_reaction, get_reactions
 from database import save_admin_note, get_admin_notes
 from database import log_login_device, get_login_devices
-from database import admin_exists, get_admin_username
 from auth import is_strong_password, register_user, login_user, change_password
 from crypto_utils import double_encrypt, double_decrypt, hash_message
 from tamper_detection import verify_integrity
@@ -70,410 +69,13 @@ from secure_messaging import init_secure_messages_table
 init_secure_messages_table()
 
 st.set_page_config(
-    page_title="SecureChat — Encrypted Messaging Platform",
+    page_title="Secure Chat System",
     page_icon="🔐",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="wide"
 )
 
-# ─────────────────────────────────────────────────────────────────────────────
-# GLOBAL CSS THEME — Professional Security Dashboard
-# ─────────────────────────────────────────────────────────────────────────────
-st.markdown("""
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Exo+2:wght@300;400;600;700&display=swap');
-
-/* ── Root Variables ───────────────────────────── */
-:root {
-    --bg-primary:    #0a0e1a;
-    --bg-secondary:  #0f1629;
-    --bg-card:       #131929;
-    --bg-card2:      #1a2235;
-    --accent-cyan:   #00d4ff;
-    --accent-green:  #00ff9f;
-    --accent-orange: #ff6b35;
-    --accent-red:    #ff3b5c;
-    --accent-purple: #a855f7;
-    --text-primary:  #e2e8f0;
-    --text-secondary:#94a3b8;
-    --text-muted:    #475569;
-    --border:        rgba(0,212,255,0.15);
-    --border-hover:  rgba(0,212,255,0.4);
-    --glow-cyan:     0 0 20px rgba(0,212,255,0.3);
-    --glow-green:    0 0 20px rgba(0,255,159,0.3);
-}
-
-/* ── App Background ───────────────────────────── */
-.stApp {
-    background: linear-gradient(135deg, #0a0e1a 0%, #0d1528 50%, #0a1020 100%);
-    font-family: 'Exo 2', sans-serif;
-    color: var(--text-primary);
-}
-
-/* Subtle grid overlay */
-.stApp::before {
-    content: '';
-    position: fixed;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background-image:
-        linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
-    pointer-events: none;
-    z-index: 0;
-}
-
-/* ── Sidebar ──────────────────────────────────── */
-[data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #080c18 0%, #0c1220 100%) !important;
-    border-right: 1px solid var(--border);
-    box-shadow: 4px 0 30px rgba(0,0,0,0.5);
-}
-[data-testid="stSidebar"] * {
-    font-family: 'Exo 2', sans-serif !important;
-    color: var(--text-primary) !important;
-}
-[data-testid="stSidebarContent"] {
-    padding-top: 1rem;
-}
-
-/* ── Sidebar Radio (Navigation) ───────────────── */
-[data-testid="stSidebar"] .stRadio > div {
-    gap: 4px;
-}
-[data-testid="stSidebar"] .stRadio label {
-    background: rgba(0,212,255,0.04) !important;
-    border: 1px solid transparent !important;
-    border-radius: 8px !important;
-    padding: 10px 14px !important;
-    margin: 2px 0 !important;
-    transition: all 0.2s ease !important;
-    font-size: 0.88rem !important;
-    font-weight: 500 !important;
-    cursor: pointer !important;
-    display: block !important;
-    width: 100% !important;
-}
-[data-testid="stSidebar"] .stRadio label:hover {
-    background: rgba(0,212,255,0.1) !important;
-    border-color: var(--border-hover) !important;
-    box-shadow: var(--glow-cyan) !important;
-    transform: translateX(4px) !important;
-}
-[data-testid="stSidebar"] .stRadio label[data-baseweb="radio"] {
-    background: rgba(0,212,255,0.15) !important;
-    border-color: var(--accent-cyan) !important;
-}
-
-/* ── Main Content Area ────────────────────────── */
-.main .block-container {
-    padding: 1.5rem 2rem 2rem 2rem;
-    max-width: 1400px;
-}
-
-/* ── Typography ───────────────────────────────── */
-h1, h2, h3 {
-    font-family: 'Rajdhani', sans-serif !important;
-    font-weight: 700 !important;
-    letter-spacing: 0.05em !important;
-}
-h1 { color: var(--accent-cyan) !important; font-size: 2rem !important; }
-h2 { color: var(--text-primary) !important; font-size: 1.5rem !important; }
-h3 { color: var(--accent-cyan) !important; font-size: 1.2rem !important; }
-
-/* ── Metric Cards ─────────────────────────────── */
-[data-testid="metric-container"] {
-    background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-card2) 100%) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 12px !important;
-    padding: 1.2rem 1.5rem !important;
-    box-shadow: 0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05) !important;
-    transition: all 0.3s ease !important;
-    position: relative !important;
-    overflow: hidden !important;
-}
-[data-testid="metric-container"]::before {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: 2px;
-    background: linear-gradient(90deg, var(--accent-cyan), var(--accent-green));
-}
-[data-testid="metric-container"]:hover {
-    border-color: var(--border-hover) !important;
-    box-shadow: var(--glow-cyan), 0 8px 32px rgba(0,0,0,0.5) !important;
-    transform: translateY(-2px) !important;
-}
-[data-testid="metric-container"] label {
-    color: var(--text-secondary) !important;
-    font-size: 0.78rem !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.1em !important;
-    text-transform: uppercase !important;
-}
-[data-testid="metric-container"] [data-testid="stMetricValue"] {
-    color: var(--accent-cyan) !important;
-    font-family: 'Share Tech Mono', monospace !important;
-    font-size: 2rem !important;
-}
-
-/* ── Buttons ──────────────────────────────────── */
-.stButton > button {
-    background: linear-gradient(135deg, rgba(0,212,255,0.1), rgba(0,212,255,0.05)) !important;
-    border: 1px solid var(--accent-cyan) !important;
-    color: var(--accent-cyan) !important;
-    border-radius: 8px !important;
-    font-family: 'Exo 2', sans-serif !important;
-    font-weight: 600 !important;
-    font-size: 0.85rem !important;
-    letter-spacing: 0.05em !important;
-    padding: 0.5rem 1.2rem !important;
-    transition: all 0.25s ease !important;
-    box-shadow: 0 0 10px rgba(0,212,255,0.1) !important;
-}
-.stButton > button:hover {
-    background: linear-gradient(135deg, rgba(0,212,255,0.25), rgba(0,212,255,0.1)) !important;
-    box-shadow: var(--glow-cyan) !important;
-    transform: translateY(-1px) !important;
-}
-.stButton > button:active { transform: translateY(0) !important; }
-
-/* Primary/danger button variants */
-.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, var(--accent-cyan), #0099cc) !important;
-    color: #000 !important;
-    border: none !important;
-}
-.stDownloadButton > button {
-    background: linear-gradient(135deg, rgba(0,255,159,0.1), rgba(0,255,159,0.05)) !important;
-    border-color: var(--accent-green) !important;
-    color: var(--accent-green) !important;
-}
-.stDownloadButton > button:hover {
-    box-shadow: var(--glow-green) !important;
-}
-
-/* ── Inputs & Selects ─────────────────────────── */
-.stTextInput > div > div > input,
-.stTextArea > div > div > textarea,
-.stSelectbox > div > div,
-.stMultiSelect > div > div {
-    background: var(--bg-card2) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 8px !important;
-    color: var(--text-primary) !important;
-    font-family: 'Exo 2', sans-serif !important;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease !important;
-}
-.stTextInput > div > div > input:focus,
-.stTextArea > div > div > textarea:focus {
-    border-color: var(--accent-cyan) !important;
-    box-shadow: 0 0 0 2px rgba(0,212,255,0.15) !important;
-    outline: none !important;
-}
-
-/* ── DataFrames ───────────────────────────────── */
-[data-testid="stDataFrame"] {
-    border: 1px solid var(--border) !important;
-    border-radius: 10px !important;
-    overflow: hidden !important;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
-}
-[data-testid="stDataFrame"] table {
-    background: var(--bg-card) !important;
-}
-[data-testid="stDataFrame"] th {
-    background: rgba(0,212,255,0.08) !important;
-    color: var(--accent-cyan) !important;
-    font-family: 'Rajdhani', sans-serif !important;
-    font-weight: 600 !important;
-    letter-spacing: 0.08em !important;
-    text-transform: uppercase !important;
-    font-size: 0.78rem !important;
-    border-bottom: 1px solid var(--border) !important;
-}
-[data-testid="stDataFrame"] td {
-    color: var(--text-primary) !important;
-    border-bottom: 1px solid rgba(255,255,255,0.04) !important;
-    font-size: 0.88rem !important;
-}
-
-/* ── Alerts ───────────────────────────────────── */
-.stSuccess > div {
-    background: linear-gradient(135deg, rgba(0,255,159,0.08), rgba(0,255,159,0.04)) !important;
-    border: 1px solid rgba(0,255,159,0.3) !important;
-    border-radius: 10px !important;
-    color: var(--accent-green) !important;
-}
-.stError > div {
-    background: linear-gradient(135deg, rgba(255,59,92,0.08), rgba(255,59,92,0.04)) !important;
-    border: 1px solid rgba(255,59,92,0.3) !important;
-    border-radius: 10px !important;
-    color: #ff6b8a !important;
-}
-.stWarning > div {
-    background: linear-gradient(135deg, rgba(255,107,53,0.08), rgba(255,107,53,0.04)) !important;
-    border: 1px solid rgba(255,107,53,0.3) !important;
-    border-radius: 10px !important;
-    color: #ffaa70 !important;
-}
-.stInfo > div {
-    background: linear-gradient(135deg, rgba(0,212,255,0.08), rgba(0,212,255,0.04)) !important;
-    border: 1px solid rgba(0,212,255,0.25) !important;
-    border-radius: 10px !important;
-    color: var(--accent-cyan) !important;
-}
-
-/* ── Expanders ────────────────────────────────── */
-[data-testid="stExpander"] {
-    background: var(--bg-card) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 10px !important;
-    overflow: hidden !important;
-}
-[data-testid="stExpander"] summary {
-    background: rgba(0,212,255,0.04) !important;
-    color: var(--text-primary) !important;
-    font-weight: 600 !important;
-    padding: 0.75rem 1rem !important;
-}
-
-/* ── Code blocks ──────────────────────────────── */
-.stCode, code, pre {
-    background: rgba(0,0,0,0.4) !important;
-    border: 1px solid var(--border) !important;
-    border-radius: 8px !important;
-    font-family: 'Share Tech Mono', monospace !important;
-    color: var(--accent-green) !important;
-    font-size: 0.82rem !important;
-}
-
-/* ── Dividers ─────────────────────────────────── */
-hr {
-    border: none !important;
-    border-top: 1px solid var(--border) !important;
-    margin: 1.5rem 0 !important;
-}
-
-/* ── Tabs ─────────────────────────────────────── */
-.stTabs [data-baseweb="tab-list"] {
-    background: var(--bg-card) !important;
-    border-radius: 10px !important;
-    padding: 4px !important;
-    gap: 4px !important;
-    border: 1px solid var(--border) !important;
-}
-.stTabs [data-baseweb="tab"] {
-    border-radius: 8px !important;
-    color: var(--text-secondary) !important;
-    font-family: 'Exo 2', sans-serif !important;
-    font-weight: 600 !important;
-}
-.stTabs [aria-selected="true"] {
-    background: rgba(0,212,255,0.15) !important;
-    color: var(--accent-cyan) !important;
-}
-
-/* ── Toggle ───────────────────────────────────── */
-[data-testid="stToggle"] {
-    accent-color: var(--accent-cyan) !important;
-}
-
-/* ── Scrollbar ────────────────────────────────── */
-::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: var(--bg-primary); }
-::-webkit-scrollbar-thumb { background: rgba(0,212,255,0.3); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: var(--accent-cyan); }
-
-/* ── Caption / small text ─────────────────────── */
-.stCaption, small, .caption {
-    color: var(--text-muted) !important;
-    font-size: 0.78rem !important;
-}
-
-/* ── File uploader ────────────────────────────── */
-[data-testid="stFileUploader"] {
-    background: var(--bg-card) !important;
-    border: 1px dashed var(--border-hover) !important;
-    border-radius: 12px !important;
-    padding: 1rem !important;
-}
-
-/* ── Plotly charts ────────────────────────────── */
-.js-plotly-plot .plotly {
-    background: transparent !important;
-}
-
-/* ── Sidebar title styling ────────────────────── */
-[data-testid="stSidebar"] h1,
-[data-testid="stSidebar"] h2,
-[data-testid="stSidebar"] h3 {
-    color: var(--accent-cyan) !important;
-    font-family: 'Rajdhani', sans-serif !important;
-    border-bottom: 1px solid var(--border) !important;
-    padding-bottom: 8px !important;
-    margin-bottom: 12px !important;
-}
-
-/* ── Page section headers ─────────────────────── */
-.section-header {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
-    background: linear-gradient(90deg, rgba(0,212,255,0.08), transparent);
-    border-left: 3px solid var(--accent-cyan);
-    border-radius: 0 8px 8px 0;
-    margin-bottom: 1rem;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# ── Page Header ───────────────────────────────────────────────────────────────
-st.markdown("""
-<div style="
-    display: flex;
-    align-items: center;
-    gap: 16px;
-    padding: 20px 24px;
-    background: linear-gradient(135deg, rgba(0,212,255,0.06) 0%, rgba(0,255,159,0.03) 100%);
-    border: 1px solid rgba(0,212,255,0.15);
-    border-radius: 16px;
-    margin-bottom: 1.5rem;
-    position: relative;
-    overflow: hidden;
-">
-    <div style="
-        width: 52px; height: 52px;
-        background: linear-gradient(135deg, rgba(0,212,255,0.2), rgba(0,255,159,0.1));
-        border: 1px solid rgba(0,212,255,0.4);
-        border-radius: 14px;
-        display: flex; align-items: center; justify-content: center;
-        font-size: 1.6rem; flex-shrink: 0;
-        box-shadow: 0 0 20px rgba(0,212,255,0.2);
-    ">🔐</div>
-    <div>
-        <h1 style="margin:0; padding:0; font-family:'Rajdhani',sans-serif; font-size:1.8rem;
-                   font-weight:700; color:#00d4ff; letter-spacing:0.05em; line-height:1.1;">
-            SECURECHAT
-        </h1>
-        <p style="margin:0; color:#475569; font-size:0.78rem; font-family:'Share Tech Mono',monospace;
-                  letter-spacing:0.12em; text-transform:uppercase;">
-            Encrypted Messaging Platform &nbsp;·&nbsp; Breach Detection System
-        </p>
-    </div>
-    <div style="
-        position: absolute; right: 24px;
-        font-family: 'Share Tech Mono', monospace;
-        font-size: 0.72rem; color: rgba(0,212,255,0.4);
-        text-align: right; line-height: 1.6;
-    ">
-        <div>AES-256 ENCRYPTED</div>
-        <div>RSA-2048 SIGNED</div>
-        <div>TAMPER DETECTION ACTIVE</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+st.title("🔐 Secure Chat System with Breach Detection")
+st.caption("Version 3 — Professional Security Messaging Dashboard")
 
 # -------------------------
 # SESSION STATE
@@ -498,62 +100,43 @@ if st.session_state.user:
 # -------------------------
 # SIDEBAR AUTH
 # -------------------------
-st.sidebar.markdown("""
-<div style="text-align:center; padding: 16px 8px 20px 8px; border-bottom: 1px solid rgba(0,212,255,0.15); margin-bottom:16px;">
-    <div style="font-size:2rem; margin-bottom:4px;">🔐</div>
-    <div style="font-family:'Rajdhani',sans-serif; font-weight:700; font-size:1.3rem;
-                color:#00d4ff; letter-spacing:0.12em;">SECURECHAT</div>
-    <div style="font-family:'Share Tech Mono',monospace; font-size:0.62rem;
-                color:#334155; letter-spacing:0.15em; text-transform:uppercase;">
-        Secure Messaging Platform
-    </div>
-</div>
-""", unsafe_allow_html=True)
+st.sidebar.title("🔑 Authentication")
 
-st.sidebar.markdown("### 🔑 Authentication")
 auth_mode = st.sidebar.radio("Choose Action", ["Login", "Register"])
 
 if auth_mode == "Register":
     st.sidebar.subheader("Register New User")
-    st.sidebar.caption("🔒 All new accounts are registered as **Client** only.")
-
-    reg_username  = st.sidebar.text_input("Username", key="reg_user")
-    reg_password  = st.sidebar.text_input("Password", type="password", key="reg_pass")
-    reg_key       = st.sidebar.text_input("Personal Encryption Key", type="password", key="reg_key")
-    reg_pin       = st.sidebar.text_input("Set 4-digit PIN", type="password", key="reg_pin")
+    reg_username = st.sidebar.text_input("Username", key="reg_user")
+    reg_password = st.sidebar.text_input("Password", type="password", key="reg_pass")
+    reg_key = st.sidebar.text_input("Personal Encryption Key", type="password", key="reg_key")
+    reg_pin = st.sidebar.text_input("Set 4-digit PIN (used for decryption & duress detection)", type="password", key="reg_pin")
+    reg_role = st.sidebar.selectbox("Account Role", ["client", "admin"], key="reg_role")
 
     if st.sidebar.button("Register"):
         if reg_username and reg_password and reg_key and reg_pin:
+            if not reg_pin.isdigit() or len(reg_pin) != 4:
+                st.sidebar.error("PIN must be exactly 4 digits")
 
-            # ── Block any attempt to use the admin's username ──
-            admin_uname = get_admin_username()
-            if admin_uname and reg_username.lower() == admin_uname.lower():
-                st.sidebar.error("❌ That username is reserved. Please choose a different username.")
-
-            elif not reg_pin.isdigit() or len(reg_pin) != 4:
-                st.sidebar.error("❌ PIN must be exactly 4 digits.")
-
-            elif not is_strong_password(reg_password):
-                st.sidebar.error("❌ Password too weak! Must be 8+ chars, include uppercase, lowercase, number & symbol.")
-
+            if not is_strong_password(reg_password):
+                st.sidebar.error("Password too weak! Must be 8+ chars, include uppercase, lowercase, number & symbol.")
             else:
                 private_key, public_key = generate_keys()
                 success = register_user(
                     reg_username,
                     reg_password,
                     reg_key,
-                    role="client",       # Always client — admin is set via create_admin.py
+                    role=reg_role,
                     pin=str(reg_pin),
                     public_key=public_key,
                     private_key=private_key
                 )
                 if success:
-                    st.sidebar.success("✅ Client account registered successfully!")
-                    log_action(reg_username, "Registered new client account", "INFO")
+                    st.sidebar.success(f"User registered successfully as **{reg_role}**!")
+                    log_action(reg_username, f"Registered account with role: {reg_role}", "INFO")
                 else:
-                    st.sidebar.error("❌ Username already exists. Please choose another.")
+                    st.sidebar.error("Username already exists.")
         else:
-            st.sidebar.warning("⚠️ Please fill in all fields.")
+            st.sidebar.warning("Fill all fields.")
 
 if auth_mode == "Login":
     st.sidebar.subheader("Login")
@@ -594,7 +177,7 @@ if st.session_state.user:
     if st.sidebar.button("Logout"):
         st.session_state.user = None
         st.success("Logged out successfully!")
-        st.rerun()
+        st.experimental_rerun()
 
 
 
@@ -627,105 +210,37 @@ if st.session_state.user:
         st.stop()
     # ────────────────────────────────────────────────────────────────────────
 
-    role_color = "#a855f7" if user_is_admin else "#00d4ff"
-    role_bg    = "rgba(168,85,247,0.1)" if user_is_admin else "rgba(0,212,255,0.08)"
+    role_badge = "🛡️ Admin" if user_is_admin else "👤 Client"
+    st.success(f"Logged in as: **{current_user}** ({role_badge})")
 
-    st.markdown(f"""
-    <div style="
-        display:flex; align-items:center; justify-content:space-between;
-        padding: 12px 20px;
-        background: {role_bg};
-        border: 1px solid {role_color}40;
-        border-radius: 12px;
-        margin-bottom: 1rem;
-    ">
-        <div style="display:flex; align-items:center; gap:12px;">
-            <div style="
-                width:40px; height:40px; border-radius:50%;
-                background: linear-gradient(135deg,{role_color}33,{role_color}11);
-                border: 2px solid {role_color}66;
-                display:flex; align-items:center; justify-content:center;
-                font-size:1.2rem;
-            ">{"🛡️" if user_is_admin else "👤"}</div>
-            <div>
-                <div style="font-family:'Rajdhani',sans-serif; font-weight:700;
-                            font-size:1.05rem; color:{role_color}; letter-spacing:0.05em;">
-                    {current_user.upper()}
-                </div>
-                <div style="font-size:0.72rem; color:#475569; font-family:'Share Tech Mono',monospace;
-                            letter-spacing:0.1em; text-transform:uppercase;">
-                    {current_role} &nbsp;·&nbsp; Session Active
-                </div>
-            </div>
-        </div>
-        <div style="
-            padding: 4px 14px;
-            background: {role_color}22;
-            border: 1px solid {role_color}44;
-            border-radius: 20px;
-            font-size: 0.72rem;
-            color: {role_color};
-            font-family: 'Share Tech Mono', monospace;
-            letter-spacing: 0.1em;
-        ">● ONLINE</div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ── Dark mode: theme already dark by default; toggle adjusts contrast ───
+    # ── Dark mode CSS injection ──────────────────────────────────────────────
     dark_mode = get_user_pref(current_user, "dark_mode", "off") == "on"
     if dark_mode:
         st.markdown("""
         <style>
-        :root {
-            --bg-primary: #04060f;
-            --bg-secondary: #070a16;
-            --bg-card: #0a0e1a;
-            --bg-card2: #0d1220;
-        }
-        .stApp { background: linear-gradient(135deg,#04060f,#070b18) !important; }
-        [data-testid="stSidebar"] { background: linear-gradient(180deg,#030509,#060a14) !important; }
+        .stApp { background-color: #1e1e2e; color: #cdd6f4; }
+        .stSidebar { background-color: #181825; }
+        .stTextInput>div>div>input { background-color: #313244; color: #cdd6f4; }
+        .stTextArea textarea { background-color: #313244; color: #cdd6f4; }
+        .stSelectbox>div>div { background-color: #313244; color: #cdd6f4; }
+        .stDataFrame { background-color: #313244; }
+        div[data-testid="metric-container"] { background-color: #313244; border-radius:8px; padding:8px; }
+        .stAlert { background-color: #313244; }
+        h1,h2,h3,h4,h5,h6,p,label { color: #cdd6f4 !important; }
         </style>""", unsafe_allow_html=True)
 
     # ── Broadcast alert banner ───────────────────────────────────────────────
     broadcasts = get_broadcasts()
     if broadcasts:
         latest = broadcasts[0]
-        st.markdown(f"""
-        <div style="
-            display:flex; align-items:center; gap:12px;
-            padding: 10px 18px;
-            background: linear-gradient(90deg, rgba(255,107,53,0.1), rgba(255,107,53,0.04));
-            border: 1px solid rgba(255,107,53,0.35);
-            border-left: 4px solid #ff6b35;
-            border-radius: 10px;
-            margin-bottom: 1rem;
-        ">
-            <span style="font-size:1.1rem;">📢</span>
-            <div>
-                <span style="color:#ff6b35; font-family:'Rajdhani',sans-serif;
-                             font-weight:700; font-size:0.82rem; letter-spacing:0.08em;
-                             text-transform:uppercase;">Admin Broadcast</span>
-                <span style="color:#94a3b8; font-size:0.72rem; margin-left:8px;
-                             font-family:'Share Tech Mono',monospace;">{latest[2]}</span>
-                <div style="color:#e2e8f0; font-size:0.88rem; margin-top:2px;">{latest[1]}</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        st.warning(f"📢 **Admin Broadcast** ({latest[2]}): {latest[1]}")
     # ────────────────────────────────────────────────────────────────────────
 
     # -------------------------
     # SIDEBAR NAVIGATION
     # -------------------------
     st.sidebar.markdown("---")
-    st.sidebar.markdown("""
-    <div style="border-bottom: 1px solid rgba(0,212,255,0.15);
-                padding-bottom: 8px; margin-bottom: 12px; margin-top: 8px;">
-        <span style="font-family:'Rajdhani',sans-serif; font-weight:700; font-size:0.85rem;
-                     color:#00d4ff; letter-spacing:0.15em; text-transform:uppercase;">
-            ◈ Navigation
-        </span>
-    </div>
-    """, unsafe_allow_html=True)
+    st.sidebar.title("📂 Navigation")
 
     # Admin sees all pages; clients see everything except full Logs page
     if user_is_admin:
@@ -745,7 +260,7 @@ if st.session_state.user:
     # DASHBOARD PAGE
     # -------------------------
     if page == "Dashboard":
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">📊 System Dashboard</span></div>', unsafe_allow_html=True)
+        st.subheader("📊 System Dashboard")
 
         conn = get_connection()
         cursor = conn.cursor()
@@ -793,7 +308,7 @@ if st.session_state.user:
         c4.metric("❌ Failed Decryptions", failed_decryptions)
 
         st.markdown("---")
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">📌 Quick Overview</span></div>', unsafe_allow_html=True)
+        st.subheader("📌 Quick Overview")
 
         colA, colB = st.columns(2)
 
@@ -811,7 +326,7 @@ if st.session_state.user:
     # SEND MESSAGE PAGE
     # -------------------------
     # elif page == "Send Message":
-    #     st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">📤 Send Encrypted Message</span></div>', unsafe_allow_html=True)
+    #     st.subheader("📤 Send Encrypted Message")
 
     #     conn = get_connection()
     #     cursor = conn.cursor()
@@ -932,7 +447,7 @@ if st.session_state.user:
     #             )
 
     #             st.success("🔐 High-security message sent (Signed + Encrypted)")
-    #         st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">📌 Conversation History </span></div>', unsafe_allow_html=True)
+    #         st.subheader("📌 Conversation History ")
     #         for msg in conversation:
     #             sender, receiver, encrypted_for, encrypted_message, hash_value, plaintext_hash, timestamp, status = msg
 
@@ -960,7 +475,7 @@ if st.session_state.user:
     #         st.warning("No other users available. Please register another client first.")
 
     elif page == "Send Message":
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">💬 Secure Chat</span></div>', unsafe_allow_html=True)
+        st.subheader("💬 Secure Chat")
 
         conn = get_connection()
         cursor = conn.cursor()
@@ -1122,7 +637,7 @@ if st.session_state.user:
     # INBOX PAGE
     # -------------------------
     elif page == "Inbox":
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">📥 Inbox Messages</span></div>', unsafe_allow_html=True)
+        st.subheader("📥 Inbox Messages")
 
         conn = get_connection()
         cursor = conn.cursor()
@@ -1300,7 +815,7 @@ if st.session_state.user:
     # -------------------------
     elif page == "Logs":
         if user_is_admin:
-            st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">📜 All System Logs (Admin View)</span></div>', unsafe_allow_html=True)
+            st.subheader("📜 All System Logs (Admin View)")
             logs = get_logs()
             if logs:
                 df_logs = pd.DataFrame(logs, columns=["User", "Action", "Severity", "Timestamp"])
@@ -1308,26 +823,18 @@ if st.session_state.user:
                 if severity_filter != "All":
                     df_logs = df_logs[df_logs["Severity"] == severity_filter]
 
-                def highlight_severity(row):
-                    color_map = {
-                        "INFO": "color: #2196F3",
-                        "WARNING": "color: #FF9800",
-                        "ALERT": "color: #f44336",
-                        "CRITICAL": "color: #9C27B0; font-weight:bold"
-                    }
-                    sev = row.get("Severity", "")
-                    style = color_map.get(sev, "")
-                    return ["" if col != "Severity" else style for col in row.index]
+                def color_severity(val):
+                    colors = {"INFO": "color: #2196F3", "WARNING": "color: #FF9800",
+                              "ALERT": "color: #f44336", "CRITICAL": "color: #9C27B0; font-weight:bold"}
+                    return colors.get(val, "")
 
-                st.dataframe(
-                    df_logs.style.apply(highlight_severity, axis=1),
-                    use_container_width=True
-                )
+                st.dataframe(df_logs.style.applymap(color_severity, subset=["Severity"]),
+                             use_container_width=True)
             else:
                 st.info("No logs available.")
         else:
             # Clients only see their own non-duress logs
-            st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">📜 My Activity Logs</span></div>', unsafe_allow_html=True)
+            st.subheader("📜 My Activity Logs")
             logs = get_user_logs(current_user)
             # Strip duress entries – those are admin-only
             logs = [l for l in logs if "[DURESS ALERT]" not in l[1]]
@@ -1341,7 +848,7 @@ if st.session_state.user:
     # SECURITY CENTER PAGE
     # -------------------------
     elif page == "Security Center":
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">⚠️ Security Center</span></div>', unsafe_allow_html=True)
+        st.subheader("⚠️ Security Center")
 
         conn = get_connection()
         cursor = conn.cursor()
@@ -1432,7 +939,7 @@ if st.session_state.user:
         st.plotly_chart(fig_threat, use_container_width=True)
 
     elif page == "Profile":
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">👤 {current_user.upper()} — Profile</span></div>', unsafe_allow_html=True)
+        st.subheader(f"👤 {current_user} Profile")
 
         conn = get_connection()
         cursor = conn.cursor()
@@ -1448,13 +955,13 @@ if st.session_state.user:
         st.write(f"**Personal Key:** {personal_key}")
 
         suspicious_score = failed_logins*2 + failed_decryptions*3 + tamper_events*5
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">⚠️ Suspicious Activity Score</span></div>', unsafe_allow_html=True)
+        st.subheader("⚠️ Suspicious Activity Score")
         st.metric("Suspicious Activity Score", suspicious_score)
 
         st.markdown("---")
 
         # ── Settings ────────────────────────────────────────────────────────
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">⚙️ Account Settings</span></div>', unsafe_allow_html=True)
+        st.subheader("⚙️ Account Settings")
 
         col_dm, col_tm = st.columns(2)
 
@@ -1483,7 +990,7 @@ if st.session_state.user:
         st.markdown("---")
 
         # ── Activity heatmap ─────────────────────────────────────────────────
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">📅 Activity Heatmap</span></div>', unsafe_allow_html=True)
+        st.subheader("📅 Activity Heatmap")
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -1526,7 +1033,7 @@ if st.session_state.user:
         st.markdown("---")
 
         # ── 11. Activity Timeline ─────────────────────────────────────────────
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">📋 Activity Timeline</span></div>', unsafe_allow_html=True)
+        st.subheader("📋 Activity Timeline")
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -1547,7 +1054,7 @@ if st.session_state.user:
         st.markdown("---")
 
         # ── 3. Password Change ────────────────────────────────────────────────
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">🔑 Change Password</span></div>', unsafe_allow_html=True)
+        st.subheader("🔑 Change Password")
         with st.expander("Change my password"):
             old_pw = st.text_input("Current Password", type="password", key="old_pw")
             new_pw = st.text_input("New Password", type="password", key="new_pw")
@@ -1566,7 +1073,7 @@ if st.session_state.user:
         st.markdown("---")
 
         # ── 4. Device / IP Login History ─────────────────────────────────────
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">🖥️ Login Device History</span></div>', unsafe_allow_html=True)
+        st.subheader("🖥️ Login Device History")
         devices = get_login_devices(current_user)
         if devices:
             df_dev = pd.DataFrame(devices, columns=["IP Address", "Device/Platform", "Login Time"])
@@ -1575,7 +1082,7 @@ if st.session_state.user:
             st.info("No device login history yet.")
 
     elif page == "File Integrity":
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">🛡️ File Integrity Monitoring</span></div>', unsafe_allow_html=True)
+        st.subheader("🛡️ File Integrity Monitoring")
 
         import os
         from file_integrity import (
@@ -1648,7 +1155,7 @@ if st.session_state.user:
                         with st.expander("🔍 Original File Hash (pre-encryption)"):
                             st.code(original_hash)
 
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">📤 Sent Files</span></div>', unsafe_allow_html=True)
+        st.subheader("📤 Sent Files")
         sent_files = get_sent_files(current_user)
 
         if sent_files:
@@ -1664,7 +1171,7 @@ if st.session_state.user:
         else:
                 st.info("No sent files yet.")
                 
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">📥 Inbox - Received Files</span></div>', unsafe_allow_html=True)
+        st.subheader("📥 Inbox - Received Files")
         received_files = get_received_files(current_user)
 
         if received_files:
@@ -1754,7 +1261,7 @@ if st.session_state.user:
             st.info("No received files yet.")
 
         # st.markdown("---")
-        # st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">📂 Monitored Files</span></div>', unsafe_allow_html=True)
+        # st.subheader("📂 Monitored Files")
 
         # files = get_user_files(current_user)
 
@@ -1793,7 +1300,7 @@ if st.session_state.user:
 
 
     elif page == "Network Traffic Analysis":
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">🌐 Network Traffic Breach Analysis</span></div>', unsafe_allow_html=True)
+        st.subheader("🌐 Network Traffic Breach Analysis")
         st.caption("Upload CIC IDS2017 traffic CSV and detect suspicious network flows")
 
         from network_analysis import (
@@ -1904,7 +1411,7 @@ if st.session_state.user:
     # SEARCH MESSAGES PAGE
     # ─────────────────────────────────────────────
     elif page == "Search Messages":
-        st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">🔍 Search Messages</span></div>', unsafe_allow_html=True)
+        st.subheader("🔍 Search Messages")
         st.caption("Search through your decrypted message history.")
 
         search_query = st.text_input("🔎 Enter keyword to search", placeholder="e.g. hello, meeting, report...")
@@ -1982,30 +1489,17 @@ if st.session_state.user:
         if not user_is_admin:
             st.error("Access Denied. This page is for administrators only.")
         else:
-            st.markdown(f'<div class="section-header"><span style="font-family:\'Rajdhani\',sans-serif; font-weight:700; font-size:1.15rem; color:#e2e8f0; letter-spacing:0.04em;">Admin Control Panel</span></div>', unsafe_allow_html=True)
+            st.subheader("Admin Control Panel")
 
             st.markdown("### 👥 Registered Users")
             conn = get_connection()
             cursor = conn.cursor()
-            cursor.execute("SELECT username, role, status FROM users ORDER BY role, username")
+            cursor.execute("SELECT username, role FROM users ORDER BY role, username")
             all_users = cursor.fetchall()
             conn.close()
-
             if all_users:
-                df_users = pd.DataFrame(all_users, columns=["Username", "Role", "Status"])
-
-                def highlight_user_row(row):
-                    if row["Role"] == "admin":
-                        return ["color: #9C27B0; font-weight:bold"] * len(row)
-                    elif row["Status"] == "frozen":
-                        return ["color: #f44336"] * len(row)
-                    return ["color: #2196F3"] * len(row)
-
-                st.dataframe(
-                    df_users.style.apply(highlight_user_row, axis=1),
-                    use_container_width=True
-                )
-                st.caption("🟣 Purple = Admin  |  🔴 Red = Frozen  |  🔵 Blue = Active Client")
+                df_users = pd.DataFrame(all_users, columns=["Username", "Role"])
+                st.dataframe(df_users, use_container_width=True)
             else:
                 st.info("No users registered.")
 
@@ -2194,19 +1688,14 @@ if st.session_state.user:
                 sev_filter = st.selectbox("Filter by Severity", sev_options, key="admin_sev_filter")
                 if sev_filter != "All":
                     df_all_logs = df_all_logs[df_all_logs["Severity"] == sev_filter]
-                def highlight_sev(row):
-                    color_map = {
-                        "INFO": "color: #2196F3",
-                        "WARNING": "color: #FF9800",
-                        "ALERT": "color: #f44336",
-                        "CRITICAL": "color: #9C27B0; font-weight:bold"
+                def color_sev(val):
+                    mapping = {
+                        "INFO": "color: #2196F3", "WARNING": "color: #FF9800",
+                        "ALERT": "color: #f44336", "CRITICAL": "color: #9C27B0; font-weight:bold"
                     }
-                    sev = row.get("Severity", "")
-                    style = color_map.get(sev, "")
-                    return ["" if col != "Severity" else style for col in row.index]
-
+                    return mapping.get(val, '')
                 st.dataframe(
-                    df_all_logs.style.apply(highlight_sev, axis=1),
+                    df_all_logs.style.applymap(color_sev, subset=["Severity"]),
                     use_container_width=True
                 )
                 st.markdown("#### Severity Distribution")

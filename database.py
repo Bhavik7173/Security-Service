@@ -119,24 +119,6 @@ def get_all_other_users(current_user):
 
     conn.close()
     return users
-
-def admin_exists():
-    """Returns True if an admin account already exists in the database."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT username FROM users WHERE role='admin'")
-    row = cursor.fetchone()
-    conn.close()
-    return row is not None
-
-def get_admin_username():
-    """Returns the admin username if one exists, else None."""
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT username FROM users WHERE role='admin'")
-    row = cursor.fetchone()
-    conn.close()
-    return row[0] if row else None
 def freeze_user(username, reason="Duress alert triggered"):
     conn = get_connection()
     cursor = conn.cursor()

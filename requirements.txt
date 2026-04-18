@@ -4,4 +4,3 @@ plotly
 pycryptodome
 bcrypt
 scikit-learn
-cryptography

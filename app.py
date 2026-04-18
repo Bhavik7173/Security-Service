@@ -1733,14 +1733,19 @@ if st.session_state.user:
                 sev_filter = st.selectbox("Filter by Severity", sev_options, key="admin_sev_filter")
                 if sev_filter != "All":
                     df_all_logs = df_all_logs[df_all_logs["Severity"] == sev_filter]
-                def color_sev(val):
-                    mapping = {
-                        "INFO": "color: #2196F3", "WARNING": "color: #FF9800",
-                        "ALERT": "color: #f44336", "CRITICAL": "color: #9C27B0; font-weight:bold"
+                def highlight_sev(row):
+                    color_map = {
+                        "INFO": "color: #2196F3",
+                        "WARNING": "color: #FF9800",
+                        "ALERT": "color: #f44336",
+                        "CRITICAL": "color: #9C27B0; font-weight:bold"
                     }
-                    return mapping.get(val, '')
+                    sev = row.get("Severity", "")
+                    style = color_map.get(sev, "")
+                    return ["" if col != "Severity" else style for col in row.index]
+ 
                 st.dataframe(
-                    df_all_logs.style.applymap(color_sev, subset=["Severity"]),
+                    df_all_logs.style.apply(highlight_sev, axis=1),
                     use_container_width=True
                 )
                 st.markdown("#### Severity Distribution")

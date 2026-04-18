@@ -293,8 +293,8 @@ if st.session_state.user:
                      "Profile", "File Integrity", "Network Traffic Analysis",
                      "Search Messages", "Admin Panel"]
     else:
-        nav_pages = ["Dashboard", "Send Message", "Inbox", "Security Center",
-                     "Profile", "File Integrity", "Network Traffic Analysis",
+        nav_pages = ["Dashboard", "Send Message", "Inbox",
+                      "File Integrity", "Profile",
                      "Search Messages"]
 
     page = st.sidebar.radio("Go to", nav_pages)

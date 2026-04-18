@@ -1,0 +1,6 @@
+streamlit
+pandas
+plotly
+pycryptodome
+bcrypt
+scikit-learn

@@ -1,6 +1,8 @@
 import streamlit as st
 from datetime import datetime
-import platform, os, shutil
+import platform, os, shutil, html
+
+import ui_theme
 
 from database import *
 from database import freeze_user, unfreeze_user, request_unfreeze, get_user_status, get_frozen_users
@@ -72,11 +74,13 @@ init_secure_messages_table()
 
 st.set_page_config(
     page_title="Secure Chat System",
-    page_icon="🔐",
+    page_icon=":material/shield_lock:",
     layout="wide"
 )
+ui_theme.apply_theme()
 
-st.title("🔐 Secure Chat System with Breach Detection")
+# Header is filled in once we know who (if anyone) is signed in.
+header_slot = st.empty()
 
 # -------------------------
 # SESSION STATE
@@ -92,7 +96,7 @@ if st.session_state.user:
     idle_seconds = (datetime.now() - st.session_state.last_active).total_seconds()
     if idle_seconds > timeout_minutes * 60:
         st.session_state.user = None
-        st.warning("⏱️ Your session expired due to inactivity. Please log in again.")
+        st.warning("Your session expired due to inactivity. Please log in again.")
         st.stop()
     else:
         st.session_state.last_active = datetime.now()
@@ -101,9 +105,13 @@ if st.session_state.user:
 # -------------------------
 # SIDEBAR AUTH
 # -------------------------
-st.sidebar.title("🔑 Authentication")
+ui_theme.sidebar_brand()
+st.sidebar.title("Account")
 
-auth_mode = st.sidebar.radio("Choose Action", ["Login", "Register"])
+# Hide the sign-in forms once a user is authenticated.
+auth_mode = None if st.session_state.user else st.sidebar.radio(
+    "Choose Action", ["Login", "Register"], horizontal=True, key="auth_mode", label_visibility="collapsed"
+)
 
 # if auth_mode == "Register":
 #     # ── First-time Admin Setup (one-time only) ──────────────────────────────
@@ -186,7 +194,7 @@ auth_mode = st.sidebar.radio("Choose Action", ["Login", "Register"])
 
 if auth_mode == "Register":
     st.sidebar.subheader("Register New User")
-    st.sidebar.caption("🔒 All new accounts are registered as **Client** only.")
+    st.sidebar.caption(":material/lock: All new accounts are registered as **Client** only.")
 
     reg_username  = st.sidebar.text_input("Username", key="reg_user")
     reg_password  = st.sidebar.text_input("Password", type="password", key="reg_pass")
@@ -199,13 +207,13 @@ if auth_mode == "Register":
             # ── Block any attempt to use the admin's username ──
             admin_uname = get_admin_username()
             if admin_uname and reg_username.lower() == admin_uname.lower():
-                st.sidebar.error("❌ That username is reserved. Please choose a different username.")
+                st.sidebar.error("That username is reserved. Please choose a different username.")
 
             elif not reg_pin.isdigit() or len(reg_pin) != 4:
-                st.sidebar.error("❌ PIN must be exactly 4 digits.")
+                st.sidebar.error("PIN must be exactly 4 digits.")
 
             elif not is_strong_password(reg_password):
-                st.sidebar.error("❌ Password too weak! Must be 8+ chars, include uppercase, lowercase, number & symbol.")
+                st.sidebar.error("Password too weak! Must be 8+ chars, include uppercase, lowercase, number & symbol.")
 
             else:
                 private_key, public_key = generate_keys()
@@ -219,12 +227,12 @@ if auth_mode == "Register":
                     private_key=private_key
                 )
                 if success:
-                    st.sidebar.success("✅ Client account registered successfully!")
+                    st.sidebar.success("Client account registered successfully!")
                     log_action(reg_username, "Registered new client account", "INFO")
                 else:
-                    st.sidebar.error("❌ Username already exists. Please choose another.")
+                    st.sidebar.error("Username already exists. Please choose another.")
         else:
-            st.sidebar.warning("⚠️ Please fill in all fields.")
+            st.sidebar.warning("Please fill in all fields.")
 
 if auth_mode == "Login":
     st.sidebar.subheader("Login")
@@ -235,7 +243,7 @@ if auth_mode == "Login":
         # Check lockout first
         is_locked, mins_remaining = check_lockout(username)
         if is_locked:
-            st.sidebar.error(f"🔒 Account locked due to too many failed attempts. Try again in {mins_remaining} minute(s).")
+            st.sidebar.error(f"Account locked due to too many failed attempts. Try again in {mins_remaining} minute(s).")
             log_action(username, f"Login attempt while locked out", "WARNING")
         else:
             user = login_user(username, password)
@@ -251,21 +259,20 @@ if auth_mode == "Login":
                 ua = f"Python/Streamlit on {platform.system()} {platform.release()}"
                 log_login_device(username, ip, ua)
                 log_action(username, f"Logged in from {ip}", "INFO")
-                st.sidebar.success(f"Welcome, {username}")
+                st.rerun()
             else:
                 locked_now = record_failed_login(username)
                 if locked_now:
-                    st.sidebar.error("🔒 Too many failed attempts. Account locked for 30 minutes.")
+                    st.sidebar.error("Too many failed attempts. Account locked for 30 minutes.")
                     log_action(username, "Account locked after 5 failed login attempts", "ALERT")
                 else:
                     log_action(username, "Failed login attempt", "WARNING")
                     st.sidebar.error("Invalid credentials")
 
 if st.session_state.user:
-    if st.sidebar.button("Logout"):
+    if st.sidebar.button(":material/logout: Sign out", key="logout"):
         st.session_state.user = None
-        st.success("Logged out successfully!")
-        st.experimental_rerun()
+        st.rerun()
 
 
 
@@ -281,54 +288,43 @@ if st.session_state.user:
     # ── Frozen account gate ──────────────────────────────────────────────────
     acct_status = get_user_status(current_user)
     if acct_status["status"] == "frozen" and not user_is_admin:
-        st.error("🔒 Your account has been **frozen** by an administrator.")
+        st.error("Your account has been **frozen** by an administrator.")
         st.warning(f"**Reason:** {acct_status['freeze_reason'] or 'Security alert triggered.'}")
 
         if acct_status["unfreeze_requested"]:
-            st.info("✅ Your unfreeze request has been sent. Please wait for admin approval.")
+            st.info("Your unfreeze request has been sent. Please wait for admin approval.")
         else:
             st.markdown("---")
-            st.markdown("### 📩 Request Account Unfreeze")
+            st.markdown("### :material/mark_email_unread: Request Account Unfreeze")
             st.write("If you believe this is a mistake, send an unfreeze request to the administrator.")
-            if st.button("📤 Send Unfreeze Request to Admin"):
+            if st.button(":material/outbox: Send Unfreeze Request to Admin"):
                 request_unfreeze(current_user)
                 log_action(current_user, "Requested account unfreeze", "INFO")
-                st.success("✅ Unfreeze request sent! An admin will review your account.")
+                st.success("Unfreeze request sent! An admin will review your account.")
                 st.rerun()
         st.stop()
     # ────────────────────────────────────────────────────────────────────────
 
-    role_badge = "🛡️ Admin" if user_is_admin else "👤 Client"
-    st.success(f"Logged in as: **{current_user}** ({role_badge})")
+    with header_slot.container():
+        ui_theme.app_header(current_user, "Administrator" if user_is_admin else "Client")
 
     # ── Dark mode CSS injection ──────────────────────────────────────────────
     dark_mode = get_user_pref(current_user, "dark_mode", "off") == "on"
     if dark_mode:
-        st.markdown("""
-        <style>
-        .stApp { background-color: #1e1e2e; color: #cdd6f4; }
-        .stSidebar { background-color: #181825; }
-        .stTextInput>div>div>input { background-color: #313244; color: #cdd6f4; }
-        .stTextArea textarea { background-color: #313244; color: #cdd6f4; }
-        .stSelectbox>div>div { background-color: #313244; color: #cdd6f4; }
-        .stDataFrame { background-color: #313244; }
-        div[data-testid="metric-container"] { background-color: #313244; border-radius:8px; padding:8px; }
-        .stAlert { background-color: #313244; }
-        h1,h2,h3,h4,h5,h6,p,label { color: #cdd6f4 !important; }
-        </style>""", unsafe_allow_html=True)
+        ui_theme.apply_dark_tokens()
 
     # ── Broadcast alert banner ───────────────────────────────────────────────
     broadcasts = get_broadcasts()
     if broadcasts:
         latest = broadcasts[0]
-        st.warning(f"📢 **Admin Broadcast** ({latest[2]}): {latest[1]}")
+        st.warning(f"**Admin Broadcast** ({latest[2]}): {latest[1]}")
     # ────────────────────────────────────────────────────────────────────────
 
     # -------------------------
     # SIDEBAR NAVIGATION
     # -------------------------
     st.sidebar.markdown("---")
-    st.sidebar.title("📂 Navigation")
+    st.sidebar.title("Navigation")
 
     # Admin sees all pages; clients see everything except full Logs page
     if user_is_admin:
@@ -336,7 +332,17 @@ if st.session_state.user:
     else:
         nav_pages = ["Dashboard", "Send Message", "Inbox", "Search Messages", "File Integrity", "Profile"]
 
-    page = st.sidebar.radio("Go to", nav_pages)
+    nav_icons = {
+        "Dashboard": "dashboard", "Send Message": "chat", "Inbox": "inbox",
+        "Search Messages": "search", "File Integrity": "verified_user", "Logs": "receipt_long",
+        "Security Center": "security", "Network Traffic Analysis": "lan",
+        "Admin Panel": "admin_panel_settings", "Profile": "account_circle",
+    }
+    page = st.sidebar.radio(
+        "Go to", nav_pages, key="nav",
+        format_func=lambda p: f":material/{nav_icons.get(p, 'circle')}: {p}",
+        label_visibility="collapsed",
+    )
 
 
             
@@ -344,7 +350,7 @@ if st.session_state.user:
     # DASHBOARD PAGE
     # -------------------------
     if page == "Dashboard":
-        st.subheader("📊 System Dashboard")
+        st.subheader(":material/bar_chart: System Dashboard")
 
         conn = get_connection()
         cursor = conn.cursor()
@@ -386,13 +392,13 @@ if st.session_state.user:
 
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("📨 Your Sent Messages", sent_count)
-        c2.metric("📥 Messages Received", inbox_count)
-        c3.metric("🚨 Tamper Alerts", tamper_alerts)
-        c4.metric("❌ Failed Decryptions", failed_decryptions)
+        c1.metric("Your Sent Messages", sent_count)
+        c2.metric("Messages Received", inbox_count)
+        c3.metric("Tamper Alerts", tamper_alerts)
+        c4.metric("Failed Decryptions", failed_decryptions)
 
         st.markdown("---")
-        st.subheader("📌 Quick Overview")
+        st.subheader(":material/push_pin: Quick Overview")
 
         colA, colB = st.columns(2)
 
@@ -559,7 +565,7 @@ if st.session_state.user:
     #         st.warning("No other users available. Please register another client first.")
 
     elif page == "Send Message":
-        st.subheader("💬 Secure Chat")
+        st.subheader(":material/chat: Secure Chat")
 
         conn = get_connection()
         cursor = conn.cursor()
@@ -568,7 +574,7 @@ if st.session_state.user:
         conn.close()
 
         if users:
-            receiver = st.selectbox("👤 Select Receiver", users)
+            receiver = st.selectbox(":material/person: Select Receiver", users)
 
             # -------------------------
             # CHAT HISTORY
@@ -584,7 +590,7 @@ if st.session_state.user:
             conversation = cursor.fetchall()
             conn.close()
 
-            st.markdown("### 💬 Conversation")
+            st.markdown("### :material/chat: Conversation")
 
             chat_container = st.container()
 
@@ -598,11 +604,11 @@ if st.session_state.user:
                     receipt = ""
                     if sender == current_user:
                         if read_at:
-                            receipt = f" ✅✅ Read at {read_at}"
+                            receipt = f" · ✓✓ Read {read_at}"
                         elif status == "delivered":
-                            receipt = " ✅ Delivered"
+                            receipt = " · ✓ Delivered"
                         else:
-                            receipt = " 🕐 Sent"
+                            receipt = " · Sent"
 
                     # Reactions
                     rxns = get_reactions(msg_id)
@@ -610,22 +616,23 @@ if st.session_state.user:
 
                     if sender == current_user:
                         st.markdown(f"""
-                            <div style='text-align:right; background:#DCF8C6; padding:10px; border-radius:10px; margin:5px'>
-                                {display_message}<br>
-                                <small>{timestamp}{receipt}</small>
-                                {"<br><span style='font-size:18px'>" + rxn_str + "</span>" if rxn_str else ""}
+                            <div class="chat-bubble out">
+                                {html.escape(str(display_message))}
+                                <span class="meta">{timestamp}{receipt}</span>
+                                {"<span class='reactions'>" + rxn_str + "</span>" if rxn_str else ""}
                             </div>
                         """, unsafe_allow_html=True)
                     else:
                         st.markdown(f"""
-                            <div style='text-align:left; background:#F1F0F0; padding:10px; border-radius:10px; margin:5px'>
-                                {display_message}<br>
-                                <small>{timestamp}</small>
-                                {"<br><span style='font-size:18px'>" + rxn_str + "</span>" if rxn_str else ""}
+                            <div class="chat-bubble in">
+                                <strong>{html.escape(str(sender))}</strong><br>
+                                {html.escape(str(display_message))}
+                                <span class="meta">{timestamp}</span>
+                                {"<span class='reactions'>" + rxn_str + "</span>" if rxn_str else ""}
                             </div>
                         """, unsafe_allow_html=True)
                         # Let receiver react
-                        react_cols = st.columns(6)
+                        react_cols = st.columns([1, 1, 1, 1, 1, 1, 12])
                         for i, emoji in enumerate(["👍","❤️","😂","😮","😢","👎"]):
                             if react_cols[i].button(emoji, key=f"react_{msg_id}_{emoji}"):
                                 add_reaction(msg_id, current_user, emoji)
@@ -640,12 +647,12 @@ if st.session_state.user:
             col1, col2 = st.columns([5,1])
 
             with col1:
-                message = st.text_input("✍️ Type your message", key="chat_msg")
+                message = st.text_input(":material/draw: Type your message", key="chat_msg")
 
             # with col2:
             #     uploaded_file = st.file_uploader("📎", label_visibility="collapsed")
 
-            if st.button("🚀 Send"):
+            if st.button(":material/rocket_launch: Send"):
 
                 # if not message and uploaded_file is None:
                 #     st.warning("Please enter a message or attach a file")
@@ -710,7 +717,7 @@ if st.session_state.user:
 
                     log_action(current_user, f"Sent message/file to {receiver}", "INFO")
 
-                    st.success("✅ Sent successfully!")
+                    st.success("Sent successfully!")
                     st.rerun()
 
         else:
@@ -721,7 +728,7 @@ if st.session_state.user:
     # INBOX PAGE
     # -------------------------
     elif page == "Inbox":
-        st.subheader("📥 Inbox Messages")
+        st.subheader(":material/inbox: Inbox Messages")
 
         conn = get_connection()
         cursor = conn.cursor()
@@ -749,7 +756,7 @@ if st.session_state.user:
                 msg_id, sender, encrypted_for, encrypted_message,  stored_hash, stored_plaintext_hash, timestamp, status, delivered_at, read_at, decrypted_message   = msg 
 
                 with st.container():
-                    st.markdown(f"### ✉️ Message from **{sender}**")
+                    st.markdown(f"### :material/mail: Message from **{sender}**")
                     st.write(f"**Encrypted For:** {encrypted_for}")
                     st.write(f"**Timestamp:** {timestamp}")
                     st.write(f"**Status:** `{status}`")
@@ -764,18 +771,18 @@ if st.session_state.user:
                     )
 
                     # Step 2: Decrypt button
-                    if st.button(f"🔓 Verify & Decrypt Message {msg_id}", key=f"decrypt_{msg_id}"):
+                    if st.button(f":material/lock_open: Verify & Decrypt Message {msg_id}", key=f"decrypt_{msg_id}"):
 
                         pin_result = check_pin(pin_input, st.session_state.user,
                                                f"decrypt message {msg_id}", current_user)
 
                         if pin_result == "wrong":
-                            st.error("❌ Incorrect PIN! Access denied.")
+                            st.error("Incorrect PIN! Access denied.")
                             log_action(current_user, f"Incorrect PIN attempt for message {msg_id}", "WARNING")
                         else:
                             # Both 'ok' and 'duress' proceed normally (duress already silently logged)
                             if pin_result == "duress":
-                                st.warning("⚠️ Proceeding under duress — alert has been raised silently.")
+                                st.warning("Proceeding under duress — alert has been raised silently.")
 
                             # 1️⃣ Verify encrypted message integrity
                             encrypted_integrity_ok = verify_integrity(encrypted_message, stored_hash)
@@ -790,8 +797,8 @@ if st.session_state.user:
 
                                     # 4️⃣ Compare sender hash vs receiver hash
                                     if receiver_plaintext_hash == stored_plaintext_hash:
-                                        st.success("✅ No threat detected. Sender and Receiver hash matched.")
-                                        st.success("✅ Integrity verified. Message decrypted successfully!")
+                                        st.success("No threat detected. Sender and Receiver hash matched.")
+                                        st.success("Integrity verified. Message decrypted successfully!")
 
                                         st.write("**After Server Layer Decryption:**")
                                         st.code(first_decrypt)
@@ -838,7 +845,7 @@ if st.session_state.user:
                                         conn.close()
 
                                     else:
-                                        st.error("🚨 THREAT DETECTED: Sender and Receiver plaintext hashes do not match!")
+                                        st.error("THREAT DETECTED: Sender and Receiver plaintext hashes do not match!")
                                         st.write("**Sender Plaintext Hash:**")
                                         st.code(stored_plaintext_hash)
 
@@ -848,16 +855,16 @@ if st.session_state.user:
                                         log_action(current_user, f"Plaintext hash mismatch detected on message {msg_id}", "ALERT")
 
                                 except Exception as e:
-                                    st.error(f"❌ Decryption failed. Possible wrong key or corruption.\n\nError: {str(e)}")
+                                    st.error(f"Decryption failed. Possible wrong key or corruption.\n\nError: {str(e)}")
                                     log_action(current_user, f"Failed decryption attempt on message {msg_id}", "WARNING")
 
                             else:
-                                st.error("⚠️ BREACH DETECTED: Encrypted message integrity verification failed!")
+                                st.error("BREACH DETECTED: Encrypted message integrity verification failed!")
                                 log_action(current_user, f"Tampering detected on encrypted message {msg_id}", "ALERT")
 
                     st.markdown("---")
                 
-                st.markdown("## 🔐 High-Security Messages (Digital Signature)")
+                st.markdown("## :material/lock: High-Security Messages (Digital Signature)")
 
                 conn = get_connection()
                 cursor = conn.cursor()
@@ -874,19 +881,19 @@ if st.session_state.user:
 
                 if secure_msgs:
                     for msg in secure_msgs:
-                        st.markdown(f"### 📩 From: {msg['sender']}")
+                        st.markdown(f"### :material/mark_email_unread: From: {msg['sender']}")
                         st.write(f"Time: {msg['timestamp']}")
                         st.write(f"Message: {msg['message']}")
 
                         if msg["signature_valid"]:
-                            st.success("✅ Signature Verified (Authentic Sender)")
+                            st.success("Signature Verified (Authentic Sender)")
                         else:
-                            st.error("❌ Signature Invalid (Possible Attack)")
+                            st.error("Signature Invalid (Possible Attack)")
 
                         if msg["integrity_ok"]:
-                            st.success("✅ Message Integrity OK")
+                            st.success("Message Integrity OK")
                         else:
-                            st.error("🚨 Message Tampered")
+                            st.error("Message Tampered")
 
                         st.markdown("---")
                 else:
@@ -899,7 +906,7 @@ if st.session_state.user:
     # -------------------------
     elif page == "Logs":
         if user_is_admin:
-            st.subheader("📜 All System Logs (Admin View)")
+            st.subheader(":material/receipt_long: All System Logs (Admin View)")
             logs = get_logs()
             if logs:
                 df_logs = pd.DataFrame(logs, columns=["User", "Action", "Severity", "Timestamp"])
@@ -926,7 +933,7 @@ if st.session_state.user:
                 st.info("No logs available.")
         else:
             # Clients only see their own non-duress logs
-            st.subheader("📜 My Activity Logs")
+            st.subheader(":material/receipt_long: My Activity Logs")
             logs = get_user_logs(current_user)
             # Strip duress entries – those are admin-only
             logs = [l for l in logs if "[DURESS ALERT]" not in l[1]]
@@ -940,7 +947,7 @@ if st.session_state.user:
     # SECURITY CENTER PAGE
     # -------------------------
     elif page == "Security Center":
-        st.subheader("⚠️ Security Center")
+        st.subheader(":material/warning: Security Center")
 
         conn = get_connection()
         cursor = conn.cursor()
@@ -983,22 +990,22 @@ if st.session_state.user:
         )
 
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("📨 Sent", sent_count)
-        c2.metric("📥 Delivered", delivered_count)
-        c3.metric("✅ Read", read_count)
-        c4.metric("🚨 Tamper Alerts", tamper_alerts)
+        c1.metric("Sent", sent_count)
+        c2.metric("Delivered", delivered_count)
+        c3.metric("Read", read_count)
+        c4.metric("Tamper Alerts", tamper_alerts)
 
         st.markdown("---")
         
         secure_tampered = sum(1 for m in secure_msgs if not m["integrity_ok"])
         invalid_signatures = sum(1 for m in secure_msgs if not m["signature_valid"])
 
-        st.metric("🔐 Signature Failures", invalid_signatures)
-        st.metric("🚨 Secure Tampering", secure_tampered)
+        st.metric("Signature Failures", invalid_signatures)
+        st.metric("Secure Tampering", secure_tampered)
 
         st.info("This dashboard helps monitor suspicious activities and breach attempts.")
 
-        st.markdown("## 📊 Message Status Overview")
+        st.markdown("## :material/bar_chart: Message Status Overview")
 
         status_data = pd.DataFrame({
             "Status": ["Sent", "Delivered", "Read"],
@@ -1014,7 +1021,7 @@ if st.session_state.user:
 
         st.plotly_chart(fig_status, use_container_width=True)
 
-        st.markdown("## 🚨 Threat Detection Overview")
+        st.markdown("## :material/crisis_alert: Threat Detection Overview")
 
         threat_data = pd.DataFrame({
             "Threat Type": ["Failed Login", "Wrong PIN", "Failed Decryption", "Tamper Alert"],
@@ -1031,7 +1038,7 @@ if st.session_state.user:
         st.plotly_chart(fig_threat, use_container_width=True)
 
     elif page == "Profile":
-        st.subheader(f"👤 {current_user} Profile")
+        st.subheader(f":material/person: {current_user} Profile")
 
         conn = get_connection()
         cursor = conn.cursor()
@@ -1047,26 +1054,26 @@ if st.session_state.user:
         st.write(f"**Personal Key:** {personal_key}")
 
         suspicious_score = failed_logins*2 + failed_decryptions*3 + tamper_events*5
-        st.subheader("⚠️ Suspicious Activity Score")
+        st.subheader(":material/warning: Suspicious Activity Score")
         st.metric("Suspicious Activity Score", suspicious_score)
 
         st.markdown("---")
 
         # ── Settings ────────────────────────────────────────────────────────
-        st.subheader("⚙️ Account Settings")
+        st.subheader(":material/settings: Account Settings")
 
         col_dm, col_tm = st.columns(2)
 
         with col_dm:
-            st.markdown("#### 🌙 Dark Mode")
+            st.markdown("#### :material/dark_mode: Dark Mode")
             current_dark = get_user_pref(current_user, "dark_mode", "off")
             dark_toggle = st.toggle("Enable Dark Mode", value=(current_dark == "on"), key="dark_toggle")
             if st.button("Save Dark Mode", key="save_dark"):
                 set_user_pref(current_user, "dark_mode", "on" if dark_toggle else "off")
-                st.success("✅ Dark mode preference saved! Reload the page to see changes.")
+                st.success("Dark mode preference saved! Reload the page to see changes.")
 
         with col_tm:
-            st.markdown("#### ⏱️ Session Timeout")
+            st.markdown("#### :material/timer: Session Timeout")
             current_timeout = int(get_user_pref(current_user, "session_timeout", "15"))
             timeout_val = st.selectbox(
                 "Auto-logout after inactivity",
@@ -1077,12 +1084,12 @@ if st.session_state.user:
             )
             if st.button("Save Timeout", key="save_timeout"):
                 set_user_pref(current_user, "session_timeout", str(timeout_val))
-                st.success(f"✅ Session timeout set to {timeout_val} minutes.")
+                st.success(f"Session timeout set to {timeout_val} minutes.")
 
         st.markdown("---")
 
         # ── Activity heatmap ─────────────────────────────────────────────────
-        st.subheader("📅 Activity Heatmap")
+        st.subheader(":material/calendar_month: Activity Heatmap")
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -1113,7 +1120,7 @@ if st.session_state.user:
 
         st.markdown("---")
         # ── Activity logs ────────────────────────────────────────────────────
-        st.markdown("### 📜 Your Activity Logs")
+        st.markdown("### :material/receipt_long: Your Activity Logs")
         logs = get_user_logs(current_user)
         logs = [l for l in logs if "[DURESS ALERT]" not in l[1]]
         if logs:
@@ -1125,7 +1132,7 @@ if st.session_state.user:
         st.markdown("---")
 
         # ── 11. Activity Timeline ─────────────────────────────────────────────
-        st.subheader("📋 Activity Timeline")
+        st.subheader(":material/list_alt: Activity Timeline")
         conn = get_connection()
         cursor = conn.cursor()
         cursor.execute(
@@ -1136,9 +1143,9 @@ if st.session_state.user:
         conn.close()
 
         if timeline_rows:
-            severity_icons = {"INFO": "🔵", "WARNING": "🟡", "ALERT": "🔴", "CRITICAL": "🟣"}
+            severity_icons = {"INFO": ":blue[:material/info:]", "WARNING": ":orange[:material/warning:]", "ALERT": ":red[:material/error:]", "CRITICAL": ":violet[:material/crisis_alert:]"}
             for action, sev, ts in timeline_rows:
-                icon = severity_icons.get(sev, "⚪")
+                icon = severity_icons.get(sev, ":gray[:material/circle:]")
                 st.markdown(f"{icon} **{ts}** — {action}")
         else:
             st.info("No timeline data yet.")
@@ -1146,7 +1153,7 @@ if st.session_state.user:
         st.markdown("---")
 
         # ── 3. Password Change ────────────────────────────────────────────────
-        st.subheader("🔑 Change Password")
+        st.subheader(":material/key: Change Password")
         with st.expander("Change my password"):
             old_pw = st.text_input("Current Password", type="password", key="old_pw")
             new_pw = st.text_input("New Password", type="password", key="new_pw")
@@ -1157,15 +1164,15 @@ if st.session_state.user:
                 else:
                     ok, msg = change_password(current_user, old_pw, new_pw)
                     if ok:
-                        st.success(f"✅ {msg}")
+                        st.success(f"{msg}")
                         log_action(current_user, "Changed account password", "INFO")
                     else:
-                        st.error(f"❌ {msg}")
+                        st.error(f"{msg}")
 
         st.markdown("---")
 
         # ── 4. Device / IP Login History ─────────────────────────────────────
-        st.subheader("🖥️ Login Device History")
+        st.subheader(":material/computer: Login Device History")
         devices = get_login_devices(current_user)
         if devices:
             df_dev = pd.DataFrame(devices, columns=["IP Address", "Device/Platform", "Login Time"])
@@ -1174,7 +1181,7 @@ if st.session_state.user:
             st.info("No device login history yet.")
 
     elif page == "File Integrity":
-        st.subheader("🛡️ File Integrity Monitoring")
+        st.subheader(":material/shield: File Integrity Monitoring")
 
         import os
         from file_integrity import (
@@ -1207,7 +1214,7 @@ if st.session_state.user:
                 pin_result = check_pin(send_pin_input, st.session_state.user,
                                        f"send file {uploaded_file.name}", current_user)
                 if pin_result == "wrong":
-                    st.error("❌ Incorrect PIN! File not sent.")
+                    st.error("Incorrect PIN! File not sent.")
                     log_action(current_user, f"Wrong PIN on file send: {uploaded_file.name}", "WARNING")
                 else:
                     if pin_result == "duress":
@@ -1221,7 +1228,7 @@ if st.session_state.user:
                     conn.close()
 
                     if not receiver_row:
-                        st.error("❌ Receiver not found.")
+                        st.error("Receiver not found.")
                     else:
                         receiver_pin = str(receiver_row[0])
 
@@ -1242,12 +1249,12 @@ if st.session_state.user:
                         save_file_record(current_user, receiver, uploaded_file.name, file_path, original_hash)
 
                         log_action(current_user, f"Sent encrypted file to {receiver}: {uploaded_file.name}", "INFO")
-                        st.success(f"✅ File '{uploaded_file.name}' encrypted with **{receiver}'s PIN** and sent!")
+                        st.success(f"File '{uploaded_file.name}'encrypted with **{receiver}'s PIN** and sent!")
 
-                        with st.expander("🔍 Original File Hash (pre-encryption)"):
+                        with st.expander(":material/search: Original File Hash (pre-encryption)"):
                             st.code(original_hash)
 
-        st.subheader("📤 Sent Files")
+        st.subheader(":material/outbox: Sent Files")
         sent_files = get_sent_files(current_user)
 
         if sent_files:
@@ -1255,15 +1262,15 @@ if st.session_state.user:
                     file_id, receiver, file_name, file_path, original_hash, last_checked_hash, status, upload_time, last_checked_time = file
 
                     with st.container():
-                        st.write(f"### 📄 {file_name}")
+                        st.write(f"### :material/description: {file_name}")
                         st.write(f"**To:** {receiver}")
                         st.write(f"**Sent Time:** {upload_time}")
-                        st.write(f"**Status:** {'✅ Safe' if status == 'safe' else '⚠️ Tampered'}")
+                        st.write(f"**Status:** {':material/check_circle: Safe' if status == 'safe' else ':material/warning: Tampered'}")
                         st.markdown("---")
         else:
                 st.info("No sent files yet.")
                 
-        st.subheader("📥 Inbox - Received Files")
+        st.subheader(":material/inbox: Inbox - Received Files")
         received_files = get_received_files(current_user)
 
         if received_files:
@@ -1271,34 +1278,34 @@ if st.session_state.user:
                 file_id, sender, file_name, file_path, original_hash, last_checked_hash, status, upload_time, last_checked_time = file
 
                 with st.container():
-                    st.write(f"### 📄 {file_name}")
+                    st.write(f"### :material/description: {file_name}")
                     st.write(f"**From:** {sender}")
                     st.write(f"**Received Time:** {upload_time}")
-                    st.write(f"**Status:** {'✅ Safe' if status == 'safe' else '⚠️ Tampered'}")
+                    st.write(f"**Status:** {':material/check_circle: Safe' if status == 'safe' else ':material/warning: Tampered'}")
 
                     # ── PIN gate: receiver enters their OWN PIN to decrypt ──
-                    st.info("ℹ️ This file was encrypted with **your PIN**. Enter your PIN to decrypt and download it.")
+                    st.info("This file was encrypted with **your PIN**. Enter your PIN to decrypt and download it.")
                     file_pin_input = st.text_input(
-                        "🔐 Enter your PIN to decrypt & download",
+                        ":material/lock: Enter your PIN to decrypt & download",
                         type="password",
                         key=f"fpin_{file_id}"
                     )
 
-                    if st.button(f"🔓 Verify, Decrypt & Download — {file_name}", key=f"fverify_{file_id}"):
+                    if st.button(f":material/lock_open: Verify, Decrypt & Download — {file_name}", key=f"fverify_{file_id}"):
                         # Validate receiver's own PIN (also catches duress)
                         pin_result = check_pin(file_pin_input, st.session_state.user,
                                                f"decrypt file {file_name}", current_user)
 
                         if pin_result == "wrong":
-                            st.error("❌ Incorrect PIN! File access denied.")
+                            st.error("Incorrect PIN! File access denied.")
                             log_action(current_user, f"Wrong PIN attempt for file: {file_name}", "WARNING")
                         else:
                             if pin_result == "duress":
-                                st.warning("⚠️ Proceeding under duress — silent alert raised.")
+                                st.warning("Proceeding under duress — silent alert raised.")
 
                             # Attempt to read and decrypt the file
                             if not os.path.exists(file_path):
-                                st.error("❌ File not found on server. It may have been moved or deleted.")
+                                st.error("File not found on server. It may have been moved or deleted.")
                                 log_action(current_user, f"File missing on server: {file_name}", "ALERT")
                             else:
                                 try:
@@ -1314,19 +1321,19 @@ if st.session_state.user:
 
                                     if decrypted_hash == original_hash:
                                         update_file_status(file_id, decrypted_hash, "safe")
-                                        st.success("✅ PIN correct! File decrypted and integrity verified.")
+                                        st.success("PIN correct! File decrypted and integrity verified.")
                                         log_action(current_user, f"Successfully decrypted & downloaded: {file_name}", "INFO")
 
-                                        with st.expander("🔍 Hash Verification"):
+                                        with st.expander(":material/search: Hash Verification"):
                                             st.write("**Original Hash (pre-encryption):**")
                                             st.code(original_hash)
                                             st.write("**Decrypted File Hash:**")
                                             st.code(decrypted_hash)
-                                            st.success("✅ Hashes match — file is untampered.")
+                                            st.success("Hashes match — file is untampered.")
 
                                         # Download button with clean decrypted bytes
                                         st.download_button(
-                                            label=f"⬇️ Download {file_name}",
+                                            label=f":material/download: Download {file_name}",
                                             data=decrypted_bytes,
                                             file_name=file_name,
                                             mime="application/octet-stream",
@@ -1335,17 +1342,17 @@ if st.session_state.user:
 
                                     else:
                                         update_file_status(file_id, decrypted_hash, "tampered")
-                                        st.error("🚨 TAMPER DETECTED! File hash does not match original.")
+                                        st.error("TAMPER DETECTED! File hash does not match original.")
                                         log_action(current_user, f"Tampering detected in file: {file_name}", "ALERT")
 
-                                        with st.expander("🔍 Hash Mismatch Details"):
+                                        with st.expander(":material/search: Hash Mismatch Details"):
                                             st.write("**Expected Hash:**")
                                             st.code(original_hash)
                                             st.write("**Actual Decrypted Hash:**")
                                             st.code(decrypted_hash)
 
                                 except Exception:
-                                    st.error("❌ Decryption failed — incorrect PIN or corrupted file.")
+                                    st.error("Decryption failed — incorrect PIN or corrupted file.")
                                     log_action(current_user, f"Failed decryption attempt for file: {file_name}", "WARNING")
 
                     st.markdown("---")
@@ -1392,7 +1399,7 @@ if st.session_state.user:
 
 
     elif page == "Network Traffic Analysis":
-        st.subheader("🌐 Network Traffic Breach Analysis")
+        st.subheader(":material/language: Network Traffic Breach Analysis")
         st.caption("Upload CIC IDS2017 traffic CSV and detect suspicious network flows")
 
         from network_analysis import (
@@ -1404,7 +1411,7 @@ if st.session_state.user:
             get_summary_stats
         )
 
-        uploaded_csv = st.file_uploader("📂 Upload CIC IDS2017 CSV file", type=["csv"])
+        uploaded_csv = st.file_uploader(":material/folder_open: Upload CIC IDS2017 CSV file", type=["csv"])
 
         if uploaded_csv is not None:
             try:
@@ -1443,7 +1450,7 @@ if st.session_state.user:
                         c3.metric("Normal Flows", summary["Normal Flows"])
 
                         st.markdown("---")
-                        st.write("### 🚨 Detection Results")
+                        st.write("### :material/crisis_alert: Detection Results")
 
                         show_cols = ["Anomaly_Label"] + feature_names
                         if "Label" in df.columns:
@@ -1453,13 +1460,13 @@ if st.session_state.user:
 
                         # Suspicious only
                         st.markdown("---")
-                        st.write("### 🔍 Suspicious Traffic Only")
+                        st.write("### :material/search: Suspicious Traffic Only")
                         suspicious_df = df[df["Anomaly_Label"] == "Suspicious"]
                         st.dataframe(suspicious_df[show_cols].head(100))
 
                         # Charts
                         st.markdown("---")
-                        st.write("### 📊 Traffic Visualizations")
+                        st.write("### :material/bar_chart: Traffic Visualizations")
 
                         if "Flow Duration" in df.columns:
                             st.write("#### Flow Duration")
@@ -1479,7 +1486,7 @@ if st.session_state.user:
 
                         log_action(current_user, "Performed network traffic anomaly analysis", "INFO")
                         st.markdown("---")
-                        st.write("### 📊 Traffic Visualizations")
+                        st.write("### :material/bar_chart: Traffic Visualizations")
 
                         if "Flow Duration" in df.columns:
                             st.write("#### Flow Duration Distribution")
@@ -1503,10 +1510,10 @@ if st.session_state.user:
     # SEARCH MESSAGES PAGE
     # ─────────────────────────────────────────────
     elif page == "Search Messages":
-        st.subheader("🔍 Search Messages")
+        st.subheader(":material/search: Search Messages")
         st.caption("Search through your decrypted message history.")
 
-        search_query = st.text_input("🔎 Enter keyword to search", placeholder="e.g. hello, meeting, report...")
+        search_query = st.text_input(":material/search: Enter keyword to search", placeholder="e.g. hello, meeting, report...")
         search_col, filter_col = st.columns([3,1])
         with filter_col:
             search_scope = st.selectbox("Search in", ["All", "Sent", "Received"], key="search_scope")
@@ -1550,7 +1557,7 @@ if st.session_state.user:
                 st.success(f"Found **{len(results)}** result(s) for `{search_query}`")
                 for r in results:
                     msg_id, sender, receiver, decrypted_msg, timestamp, status = r
-                    direction = "📤 Sent" if sender == current_user else "📥 Received"
+                    direction = ":material/outbox: Sent" if sender == current_user else ":material/inbox: Received"
                     other = receiver if sender == current_user else sender
                     display = decrypted_msg if decrypted_msg else "*(encrypted — not yet decrypted)*"
 
@@ -1583,7 +1590,7 @@ if st.session_state.user:
         else:
             st.subheader("Admin Control Panel")
 
-            st.markdown("### 👥 Registered Users")
+            st.markdown("### :material/group: Registered Users")
             conn = get_connection()
             cursor = conn.cursor()
             cursor.execute("SELECT username, role FROM users ORDER BY role, username")
@@ -1598,28 +1605,28 @@ if st.session_state.user:
             st.markdown("---")
 
             # ── 7. Broadcast Alert ───────────────────────────────────────────
-            st.markdown("### 📢 Broadcast Alert to All Users")
+            st.markdown("### :material/campaign: Broadcast Alert to All Users")
             broadcast_msg = st.text_area(
                 "Write a message to broadcast to all users",
                 placeholder="e.g. System maintenance at 10pm. Please save your work.",
                 key="broadcast_input"
             )
-            if st.button("📤 Send Broadcast", key="send_broadcast"):
+            if st.button(":material/outbox: Send Broadcast", key="send_broadcast"):
                 if broadcast_msg.strip():
                     create_broadcast(current_user, broadcast_msg.strip())
                     log_action(current_user, f"Sent broadcast: {broadcast_msg[:60]}", "INFO")
-                    st.success("✅ Broadcast sent! All users will see it on their next page load.")
+                    st.success("Broadcast sent! All users will see it on their next page load.")
                 else:
                     st.warning("Please write a message first.")
 
-            st.markdown("#### 📋 Recent Broadcasts")
+            st.markdown("#### :material/list_alt: Recent Broadcasts")
             for b in get_broadcasts():
                 st.info(f"**{b[0]}** ({b[2]}): {b[1]}")
 
             st.markdown("---")
 
             # ── 5. Audit Trail Export ────────────────────────────────────────
-            st.markdown("### 📥 Audit Trail Export")
+            st.markdown("### :material/inbox: Audit Trail Export")
             conn = get_connection()
             cursor = conn.cursor()
             cursor.execute("SELECT username, action, severity, timestamp FROM logs ORDER BY id DESC")
@@ -1633,7 +1640,7 @@ if st.session_state.user:
                 with col_csv:
                     csv_data = df_export.to_csv(index=False).encode("utf-8")
                     st.download_button(
-                        label="⬇️ Download Logs as CSV",
+                        label=":material/download: Download Logs as CSV",
                         data=csv_data,
                         file_name=f"audit_trail_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
                         mime="text/csv",
@@ -1659,7 +1666,7 @@ if st.session_state.user:
                     <table><tr><th>User</th><th>Action</th><th>Severity</th><th>Timestamp</th></tr>
                     {html_rows}</table></body></html>"""
                     st.download_button(
-                        label="⬇️ Download Logs as HTML Report",
+                        label=":material/download: Download Logs as HTML Report",
                         data=html_report.encode("utf-8"),
                         file_name=f"audit_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.html",
                         mime="text/html",
@@ -1671,7 +1678,7 @@ if st.session_state.user:
             st.markdown("---")
 
             # ── 6. System-wide Activity Heatmap ─────────────────────────────
-            st.markdown("### 📅 System-Wide Activity Heatmap")
+            st.markdown("### :material/calendar_month: System-Wide Activity Heatmap")
             conn = get_connection()
             cursor = conn.cursor()
             cursor.execute("SELECT username, timestamp FROM logs ORDER BY timestamp DESC LIMIT 2000")
@@ -1707,7 +1714,7 @@ if st.session_state.user:
             st.markdown("---")
 
             # ── Frozen Accounts & Unfreeze Requests ──────────────────────────
-            st.markdown("### 🔒 Frozen Accounts & Unfreeze Requests")
+            st.markdown("### :material/lock: Frozen Accounts & Unfreeze Requests")
             frozen_users = get_frozen_users()
 
             if frozen_users:
@@ -1715,20 +1722,20 @@ if st.session_state.user:
                     with st.container():
                         col_info, col_btn = st.columns([4, 1])
                         with col_info:
-                            st.error(f"🔒 **{fu_username}** — {fu_reason or 'No reason given'}")
+                            st.error(f"**{fu_username}** — {fu_reason or 'No reason given'}")
                             if fu_requested:
-                                st.warning("📩 This user has sent an **unfreeze request**.")
+                                st.warning("This user has sent an **unfreeze request**.")
                             else:
                                 st.caption("No unfreeze request yet.")
                         with col_btn:
-                            if st.button(f"✅ Unfreeze {fu_username}", key=f"unfreeze_{fu_username}"):
+                            if st.button(f":material/check_circle: Unfreeze {fu_username}", key=f"unfreeze_{fu_username}"):
                                 unfreeze_user(fu_username)
                                 log_action(current_user, f"Admin unfroze account: {fu_username}", "INFO")
-                                st.success(f"✅ {fu_username}'s account has been unfrozen.")
+                                st.success(f"{fu_username}'s account has been unfrozen.")
                                 st.rerun()
                         st.markdown("---")
             else:
-                st.success("✅ No accounts are currently frozen.")
+                st.success("No accounts are currently frozen.")
 
             st.markdown("---")
 
@@ -1744,7 +1751,7 @@ if st.session_state.user:
             conn.close()
             if duress_logs:
                 for d in duress_logs:
-                    st.error(f"🚨 **{d[0]}** | {d[3]} | {d[1]}")
+                    st.error(f"**{d[0]}** | {d[3]} | {d[1]}")
 
                 # Manual freeze any active user from here too
                 st.markdown("#### Manually Freeze a User")
@@ -1756,10 +1763,10 @@ if st.session_state.user:
                 if active_users:
                     freeze_target = st.selectbox("Select user to freeze", active_users, key="manual_freeze_select")
                     freeze_reason_input = st.text_input("Reason", value="Manual freeze by admin", key="manual_freeze_reason")
-                    if st.button("🔒 Freeze Account", key="manual_freeze_btn"):
+                    if st.button(":material/lock: Freeze Account", key="manual_freeze_btn"):
                         freeze_user(freeze_target, reason=freeze_reason_input)
                         log_action(current_user, f"Admin manually froze account: {freeze_target}", "WARNING")
-                        st.warning(f"🔒 {freeze_target}'s account has been frozen.")
+                        st.warning(f"{freeze_target}'s account has been frozen.")
                         st.rerun()
             else:
                 st.success("No duress alerts on record.")
@@ -1833,7 +1840,7 @@ if st.session_state.user:
             st.markdown("---")
 
             # ── 11. User Activity Timeline (admin view) ───────────────────────
-            st.markdown("### 📋 User Activity Timeline")
+            st.markdown("### :material/list_alt: User Activity Timeline")
             conn = get_connection()
             cursor = conn.cursor()
             cursor.execute("SELECT username FROM users ORDER BY username")
@@ -1851,10 +1858,10 @@ if st.session_state.user:
                 tl_rows = cursor.fetchall()
                 conn.close()
 
-                severity_icons = {"INFO": "🔵", "WARNING": "🟡", "ALERT": "🔴", "CRITICAL": "🟣"}
+                severity_icons = {"INFO": ":blue[:material/info:]", "WARNING": ":orange[:material/warning:]", "ALERT": ":red[:material/error:]", "CRITICAL": ":violet[:material/crisis_alert:]"}
                 if tl_rows:
                     for action, sev, ts in tl_rows:
-                        icon = severity_icons.get(sev, "⚪")
+                        icon = severity_icons.get(sev, ":gray[:material/circle:]")
                         st.markdown(f"{icon} **{ts}** — {action}")
                 else:
                     st.info("No activity for this user yet.")
@@ -1862,18 +1869,18 @@ if st.session_state.user:
             st.markdown("---")
 
             # ── 12. Admin Notes on Users ──────────────────────────────────────
-            st.markdown("### 📝 Admin Notes on Users")
+            st.markdown("### :material/edit_note: Admin Notes on Users")
             note_target = st.selectbox("Select user to add a note about", all_unames, key="note_target")
             note_text = st.text_area("Write a private note about this user", key="note_text_input")
-            if st.button("💾 Save Note", key="save_note_btn"):
+            if st.button(":material/save: Save Note", key="save_note_btn"):
                 if note_text.strip():
                     save_admin_note(current_user, note_target, note_text.strip())
                     log_action(current_user, f"Added admin note about {note_target}", "INFO")
-                    st.success(f"✅ Note saved for {note_target}.")
+                    st.success(f"Note saved for {note_target}.")
                 else:
                     st.warning("Please write a note first.")
 
-            st.markdown("#### 📋 Existing Notes")
+            st.markdown("#### :material/list_alt: Existing Notes")
             view_notes_user = st.selectbox("View notes for user", all_unames, key="view_notes_user")
             notes = get_admin_notes(view_notes_user)
             if notes:
@@ -1885,7 +1892,7 @@ if st.session_state.user:
             st.markdown("---")
 
             # ── 4. IP / Device Login History (admin view) ─────────────────────
-            st.markdown("### 🖥️ User Login Device History")
+            st.markdown("### :material/computer: User Login Device History")
             device_user = st.selectbox("Select user", all_unames, key="device_user_select")
             devices = get_login_devices(device_user)
             if devices:
@@ -1897,18 +1904,18 @@ if st.session_state.user:
             st.markdown("---")
 
             # ── 14. Backup & Restore ──────────────────────────────────────────
-            st.markdown("### 💾 Database Backup & Restore")
+            st.markdown("### :material/save: Database Backup & Restore")
 
             col_bk, col_rs = st.columns(2)
 
             with col_bk:
-                st.markdown("#### ⬇️ Download Backup")
+                st.markdown("#### :material/download: Download Backup")
                 db_path = "secure_chat.db"
                 if os.path.exists(db_path):
                     with open(db_path, "rb") as f:
                         db_bytes = f.read()
                     st.download_button(
-                        label="⬇️ Download Database Backup (.db)",
+                        label=":material/download: Download Database Backup (.db)",
                         data=db_bytes,
                         file_name=f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db",
                         mime="application/octet-stream",
@@ -1919,21 +1926,21 @@ if st.session_state.user:
                     st.warning("Database file not found.")
 
             with col_rs:
-                st.markdown("#### ⬆️ Restore from Backup")
+                st.markdown("#### :material/upload: Restore from Backup")
                 restore_file = st.file_uploader("Upload .db backup file", type=["db"], key="restore_upload")
                 if restore_file is not None:
-                    if st.button("⚠️ Restore Database (overwrites current!)", key="restore_btn"):
+                    if st.button(":material/warning: Restore Database (overwrites current!)", key="restore_btn"):
                         backup_bytes = restore_file.read()
                         with open(db_path, "wb") as f:
                             f.write(backup_bytes)
                         log_action(current_user, "Restored database from backup", "ALERT")
-                        st.success("✅ Database restored! Please restart the app.")
-                        st.warning("⚠️ App restart required for changes to take effect.")
+                        st.success("Database restored! Please restart the app.")
+                        st.warning("App restart required for changes to take effect.")
 
             st.markdown("---")
 
             # ── 15. System Health Monitor ──────────────────────────────────────
-            st.markdown("### 🖥️ System Health Monitor")
+            st.markdown("### :material/computer: System Health Monitor")
 
             h1, h2, h3, h4 = st.columns(4)
 
@@ -1941,17 +1948,17 @@ if st.session_state.user:
             try:
                 disk = shutil.disk_usage(".")
                 disk_used_pct = (disk.used / disk.total) * 100
-                h1.metric("💽 Disk Used", f"{disk.used//(1024**3)} GB", f"{disk_used_pct:.1f}%")
-                h2.metric("💽 Disk Free", f"{disk.free//(1024**3)} GB")
+                h1.metric("Disk Used", f"{disk.used//(1024**3)} GB", f"{disk_used_pct:.1f}%")
+                h2.metric("Disk Free", f"{disk.free//(1024**3)} GB")
             except Exception:
-                h1.metric("💽 Disk", "N/A")
+                h1.metric("Disk", "N/A")
 
             # DB size
             try:
                 db_size_kb = os.path.getsize("secure_chat.db") / 1024
-                h3.metric("🗄️ DB Size", f"{db_size_kb:.1f} KB")
+                h3.metric("DB Size", f"{db_size_kb:.1f} KB")
             except Exception:
-                h3.metric("🗄️ DB Size", "N/A")
+                h3.metric("DB Size", "N/A")
 
             # Total log entries
             conn = get_connection()
@@ -1963,12 +1970,12 @@ if st.session_state.user:
             cursor.execute("SELECT COUNT(*) FROM messages")
             total_msgs = cursor.fetchone()[0]
             conn.close()
-            h4.metric("📋 Total Log Entries", total_log_entries)
+            h4.metric("Total Log Entries", total_log_entries)
 
             sys_c1, sys_c2, sys_c3 = st.columns(3)
-            sys_c1.metric("👥 Total Users", total_users_count)
-            sys_c2.metric("💬 Total Messages", total_msgs)
-            sys_c3.metric("🐍 Python", platform.python_version())
+            sys_c1.metric("Total Users", total_users_count)
+            sys_c2.metric("Total Messages", total_msgs)
+            sys_c3.metric("Python", platform.python_version())
 
             # Uploaded files size
             try:
@@ -1977,7 +1984,7 @@ if st.session_state.user:
                     for f in os.listdir("uploaded_files")
                     if os.path.isfile(os.path.join("uploaded_files", f))
                 )
-                st.metric("📁 Uploaded Files Storage", f"{uf_size/1024:.1f} KB")
+                st.metric("Uploaded Files Storage", f"{uf_size/1024:.1f} KB")
             except Exception:
                 pass
 
@@ -1987,4 +1994,24 @@ if st.session_state.user:
 
 
 else:
-    st.info("Please login or register to use the secure chat system.")
+    with header_slot.container():
+        ui_theme.app_header()
+    st.markdown("## Secure messaging with built-in breach detection")
+    st.markdown(
+        "Sign in from the sidebar to send end-to-end encrypted messages, share files "
+        "with tamper detection, and monitor your account for suspicious activity."
+    )
+    st.write("")
+    f1, f2, f3 = st.columns(3)
+    features = [
+        (f1, "lock", "Layered encryption",
+         "Messages are encrypted twice with AES (Fernet) and can be RSA-2048 signed to prove the sender."),
+        (f2, "verified_user", "Tamper detection",
+         "SHA-256 fingerprints are re-checked on every message and file to flag any modification."),
+        (f3, "monitoring", "Breach monitoring",
+         "Audit logs, login lockout, a duress PIN and ML-based network anomaly detection."),
+    ]
+    for col, icon, title, body in features:
+        with col.container(border=True):
+            st.markdown(f"#### :blue[:material/{icon}:] {title}")
+            st.caption(body)

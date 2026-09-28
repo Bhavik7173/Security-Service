@@ -1,6 +1,6 @@
 import { StrictMode, lazy } from "react";
 import { createRoot } from "react-dom/client";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, MemoryRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import "./styles.css";
 import { AuthProvider, useAuth } from "./lib/auth";
@@ -8,6 +8,13 @@ import { ToastProvider } from "./lib/toast";
 import Layout from "./components/Layout";
 import Login from "./pages/Login";
 import Frozen from "./pages/Frozen";
+import { installMockApi } from "./demo/mockApi";
+
+// Demo build (VITE_DEMO=1): answer /api calls in the browser with simulated data.
+const DEMO = import.meta.env.VITE_DEMO === "1";
+if (DEMO) installMockApi();
+// A demo embedded in another page cannot rely on server-side routes, so keep routing in memory.
+const Router = DEMO ? MemoryRouter : BrowserRouter;
 
 // Pages load on demand so the charting library only ships with the pages that use it.
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -52,12 +59,12 @@ function App() {
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <BrowserRouter>
+    <Router>
       <ToastProvider>
         <AuthProvider>
           <App />
         </AuthProvider>
       </ToastProvider>
-    </BrowserRouter>
+    </Router>
   </StrictMode>
 );

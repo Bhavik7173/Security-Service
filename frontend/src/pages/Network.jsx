@@ -52,6 +52,9 @@ export default function Network() {
           </div>
           <div className="stack" style={{ justifyContent: "center", minWidth: 200 }}>
             <Button variant="primary" icon={Activity} loading={busy} disabled={!file} onClick={analyze}>{busy ? "Analysing…" : "Run detection"}</Button>
+            {import.meta.env.VITE_DEMO === "1" && !file && (
+              <Button icon={FileSpreadsheet} onClick={() => setFile(new File(["Flow Duration,Flow Bytes/s\n"], "cicids2017-sample.csv", { type: "text/csv" }))}>Use sample dataset</Button>
+            )}
             <span className="small muted">Model: Isolation Forest · contamination 5%</span>
           </div>
         </div>

@@ -72,7 +72,7 @@ export default function Layout({ fallback = null }) {
           })}
         </nav>
         <div className="sidebar-foot">
-          <div className="row" style={{ gap: 6 }}><Activity size={14} aria-hidden="true" /> API connected</div>
+          <div className="row" style={{ gap: 6 }}><Activity size={14} aria-hidden="true" /> {import.meta.env.VITE_DEMO === "1" ? "Demo · simulated data" : "API connected"}</div>
         </div>
       </aside>
       <div className={`scrim ${open ? "open" : ""}`} onClick={() => setOpen(false)} aria-hidden="true" />

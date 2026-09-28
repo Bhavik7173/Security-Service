@@ -29,7 +29,8 @@ export default function Logs() {
   const exportCsv = async () => {
     setExporting(true);
     try {
-      await downloadResponse(await api(`/api/logs/export.csv${qs ? `?${qs}` : ""}`, { raw: true }), "audit-logs.csv");
+      const saved = await downloadResponse(await api(`/api/logs/export.csv${qs ? `?${qs}` : ""}`, { raw: true }), "audit-logs.csv");
+      if (!saved) notify("CSV export works in the full app. Downloads are turned off in this preview.", "info");
     } catch (e) {
       notify(e.message, "error");
     } finally {

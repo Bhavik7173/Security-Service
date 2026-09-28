@@ -66,7 +66,9 @@ export async function api(path, { method = "GET", body, form, raw = false } = {}
   return type.includes("application/json") ? res.json() : res.text();
 }
 
+/** Save a response as a file. Returns false when downloads are unavailable (the demo preview). */
 export async function downloadResponse(res, fallbackName) {
+  if (import.meta.env.VITE_DEMO === "1") return false;
   const blob = await res.blob();
   const disposition = res.headers.get("content-disposition") || "";
   const match = /filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i.exec(disposition);
@@ -79,4 +81,5 @@ export async function downloadResponse(res, fallbackName) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return true;
 }

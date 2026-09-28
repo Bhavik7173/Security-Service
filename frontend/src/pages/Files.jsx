@@ -73,8 +73,8 @@ export default function Files() {
   const decrypt = async (pin) => {
     try {
       const res = await api(`/api/files/${opening.id}/decrypt`, { method: "POST", body: { pin }, raw: true });
-      await downloadResponse(res, opening.name);
-      notify("Integrity verified. Download started.");
+      const saved = await downloadResponse(res, opening.name);
+      notify(saved ? "Integrity verified. Download started." : "Integrity verified. Downloads are turned off in this preview.");
       setOpening(null);
     } catch (err) {
       if (err.status === 409) {

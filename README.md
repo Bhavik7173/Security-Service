@@ -42,6 +42,14 @@ cd frontend && npm install && npm run build && cd ..
 uvicorn backend.server:app --port 8000      # serves the built app and the API on http://localhost:8000
 ```
 
+### Demo build (no backend)
+
+```bash
+cd frontend && npm run build:demo           # writes frontend/dist-demo/
+```
+
+The demo build answers every `/api` call in the browser with simulated data (`frontend/src/demo/mockApi.js`), so the dashboard can be hosted as static files for a portfolio. Sign in as `Admin` / `Admin@12345` (PIN `1234`) or `bob` / `Demo@1234` (PIN `7390`). The normal build does not include the mock.
+
 ### Configuration
 
 | Variable | Purpose | Default |

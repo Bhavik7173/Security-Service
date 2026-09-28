@@ -147,6 +147,17 @@ export default function Login() {
               </Field>
               <Button type="submit" variant="primary" className="btn-block" loading={busy}>Sign in</Button>
               <p className="small muted">Five failed attempts lock the account for 30 minutes.</p>
+              {import.meta.env.VITE_DEMO === "1" && (
+                <div className="card" style={{ padding: 16, boxShadow: "none" }}>
+                  <strong className="small">Preview accounts</strong>
+                  <p className="small muted" style={{ margin: "4px 0 10px" }}>Everything runs in your browser with simulated data.</p>
+                  <div className="row">
+                    <Button type="button" size="sm" onClick={() => { setUsername("Admin"); setPassword("Admin@12345"); }}>Administrator</Button>
+                    <Button type="button" size="sm" onClick={() => { setUsername("bob"); setPassword("Demo@1234"); }}>Client (bob)</Button>
+                  </div>
+                  <p className="small muted" style={{ marginTop: 10 }}>PINs: Admin <code>1234</code> · bob <code>7390</code></p>
+                </div>
+              )}
             </form>
           ) : (
             <RegisterForm onDone={(name) => { setMode("login"); setUsername(name); setNotice("Account created. Sign in to continue."); }} />
